@@ -1,0 +1,32 @@
+version: "3"
+dotenv: [".env.local"]
+
+tasks:
+  install:
+    desc: "نصب وابستگی‌ها برای توسعه‌ی محلی"
+    cmds:
+      - "uv sync"
+
+  dev:
+    desc: "اجرای ایجنت در حالت توسعه"
+    interactive: true
+    cmds:
+      - "uv run src/agent.py dev"
+
+  console:
+    desc: "گفت‌وگو با ایجنت مستقیماً در ترمینال، بدون فرانت‌اند"
+    interactive: true
+    cmds:
+      - "uv run src/agent.py console"
+
+  check:
+    desc: "اجرای لینت، قالب‌بندی و تست‌ها — همان چیزی که CI اجرا می‌کند"
+    cmds:
+      - "uv run ruff check"
+      - "uv run ruff format --check"
+      - "uv run pytest -q"
+
+  simulate:
+    desc: "اجرای سناریوهای گفت‌وگو (نیازمند LiveKit CLI نسخه ۲.۱۵+)"
+    cmds:
+      - "lk agent simulate --scenarios scenarios.yaml"
