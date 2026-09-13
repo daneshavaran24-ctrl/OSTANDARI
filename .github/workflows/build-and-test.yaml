@@ -9,8 +9,12 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  frontend:
+    name: فرانت‌اند (Next.js)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -19,6 +23,7 @@ jobs:
         with:
           node-version: 22
           cache: 'pnpm'
+          cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install
@@ -31,3 +36,43 @@ jobs:
 
       - name: Ensure build succeeds
         run: pnpm build
+
+  demo-app:
+    name: اپ دمو (Vite)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: demo-app
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: demo-app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Ensure build succeeds
+        run: npm run build
+
+  agent:
+    name: ایجنت (Python)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Byte-compile sources
+        run: python -m compileall -q agent.py tools.py prompts.py
