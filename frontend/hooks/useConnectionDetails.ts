@@ -50,10 +50,12 @@ export default function useConnectionDetails() {
     if (!jwtPayload.exp) {
       return true;
     }
-    const expiresAt = new Date(jwtPayload.exp - ONE_MINUTE_IN_MILLISECONDS);
+    // `exp` در JWT برحسب ثانیه است و باید به میلی‌ثانیه تبدیل شود.
+    // یک دقیقه زودتر منقضی در نظر می‌گیریم تا توکن وسط اتصال باطل نشود.
+    const expiresAt = new Date(jwtPayload.exp * 1000 - ONE_MINUTE_IN_MILLISECONDS);
 
     const now = new Date();
-    return expiresAt >= now;
+    return expiresAt <= now;
   }, [connectionDetails?.participantToken]);
 
   const existingOrRefreshConnectionDetails = useCallback(async () => {

@@ -40,7 +40,7 @@ export const SessionView = ({
   const room = useRoomContext();
 
   useDebugMode({
-    enabled: process.env.NODE_END !== 'production',
+    enabled: process.env.NODE_ENV !== 'production',
   });
 
   async function handleSendMessage(message: string) {

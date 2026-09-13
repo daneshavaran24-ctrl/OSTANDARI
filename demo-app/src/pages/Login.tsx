@@ -44,7 +44,9 @@ const Login = () => {
       return;
     }
 
-    // Hard-coded credentials check
+    // اطلاعات ورود عمداً هاردکد شده‌اند: این یک اپ دمو است که فقط نقش
+    // «نرم‌افزار سازمانی دارای مشکل» را برای سناریوی پشتیبانی بازی می‌کند.
+    // هیچ‌وقت این الگو را در یک سامانه‌ی واقعی استفاده نکنید.
     if (username === "\\vienna\\maxman123" && password === "passw0rd") {
       // Store auth state
       localStorage.setItem("isAuthenticated", "true");
