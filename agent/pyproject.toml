@@ -1,9 +1,51 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "support-agent"
 version = "0.1.0"
+description = "دستیار صوتی پشتیبانی فنی استانداری، ساخته‌شده با LiveKit Agents"
 requires-python = ">=3.12"
+
 dependencies = [
-    "livekit-agents[bey,openai]~=1.2",
+    # نسخه عمداً روی 1.2.x قفل است — جزئیات و دلیلش در AGENTS.md
+    "livekit-agents[bey,openai]~=1.2.16",
     "livekit-plugins-noise-cancellation~=0.2",
     "python-dotenv>=1.2.1",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "B", "A", "C4", "UP", "SIM", "RUF"]
+ignore = [
+    "E501",   # طول خط — قالب‌بندی را formatter انجام می‌دهد
+    "RUF001", # کاراکترهای غیر ASCII در رشته‌ها (متن فارسی)
+    "RUF002", # کاراکترهای غیر ASCII در docstring (متن فارسی)
+    "RUF003", # کاراکترهای غیر ASCII در کامنت (متن فارسی)
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
