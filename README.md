@@ -38,6 +38,47 @@
 | `agent/` | ایجنت صوتی (`livekit-agents` + مدل Realtime اوپن‌ای‌آی + آواتار Beyond Presence) و دو ابزار `unblock_user` و `send_email`. چیدمانش از قالب رسمی [`agent-starter-python`](https://github.com/livekit-examples/agent-starter-python) پیروی می‌کند؛ جزئیات در [`agent/AGENTS.md`](agent/AGENTS.md). |
 | `demo-app/` | اپ دموی «سامانه‌ی داخلی استانداری» (Vite + React). عمداً یک مشکل ورود دارد تا سناریوی پشتیبانی قابل نمایش باشد. |
 
+## ساختار مخزن
+
+```
+OSTANDARI/
+├── agent/                  ایجنت صوتی (Python + uv)
+│   ├── src/
+│   │   ├── agent.py        نقطه‌ی ورود — نامش را عوض نکنید
+│   │   ├── prompts.py      دستورهای ایجنت (فارسی)
+│   │   └── tools.py        ابزارهای unblock_user و send_email
+│   ├── tests/test_agent.py تست‌های منطق ابزارها (بدون کلید)
+│   ├── scenarios.yaml      سناریوهای گفت‌وگو برای lk agent simulate
+│   ├── AGENTS.md           راهنمای عامل‌های کدنویس — قبل از تغییر بخوانید
+│   ├── Dockerfile          استقرار روی LiveKit Cloud
+│   └── taskfile.yaml       میان‌برهای توسعه
+│
+├── frontend/               رابط کاربری گفت‌وگو (Next.js 15 + pnpm)
+│   ├── app/                مسیرها و توکن‌سرور LiveKit
+│   ├── components/         کامپوننت‌ها، از جمله Rpc_Handler
+│   └── app-config.ts       برند، متن‌ها و قابلیت‌ها
+│
+├── demo-app/               «سامانه‌ی دارای مشکل» (Vite + npm)
+│   ├── src/pages/          صفحه‌های ورود و داشبورد
+│   ├── public/blockusers.txt   فایلی که ایجنت پاکش می‌کند
+│   └── reset-demo.sh       بازگرداندن وضعیت اولیه‌ی دمو
+│
+├── .claude/skills/ و .agents/skills/   skill رسمی لایوکیت (دو نسخه‌ی یکسان)
+├── .github/workflows/      CI
+└── docs/                   لایسنس‌های بالادستی
+```
+
+## پیش‌نیازها
+
+| ابزار | نسخه | برای |
+|---|---|---|
+| [Node.js](https://nodejs.org) | ۲۲+ | `frontend/` و `demo-app/` |
+| [pnpm](https://pnpm.io) | ۹+ | `frontend/` |
+| [uv](https://docs.astral.sh/uv/) | آخرین | `agent/` |
+| Python | ۳.۱۲+ | `agent/` (uv خودش نصبش می‌کند) |
+| [LiveKit CLI](https://docs.livekit.io/intro/basics/cli/) | ۲.۱۵+ | اختیاری — شبیه‌سازی و استقرار |
+| [Task](https://taskfile.dev) | ۳+ | اختیاری — میان‌برهای `agent/taskfile.yaml` |
+
 ## راه‌اندازی
 
 ### ۱. متغیرهای محیطی
@@ -71,6 +112,18 @@ cd agent && uv sync && uv run src/agent.py dev
 
 # رابط کاربری  →  http://localhost:3000
 cd frontend && pnpm install && pnpm dev
+```
+
+| سرویس | نشانی | نکته |
+|---|---|---|
+| رابط کاربری | `http://localhost:3000` | اینجا با دستیار حرف می‌زنید |
+| اپ دمو | `http://localhost:8080` | باید با `dev` اجرا شود، نه بیلد |
+| ایجنت | — | پورتی باز نمی‌کند؛ به اتاق LiveKit وصل می‌شود |
+
+بدون فرانت‌اند هم می‌توانید ایجنت را در ترمینال بیازمایید (بدون آواتار تصویری):
+
+```bash
+cd agent && uv run src/agent.py console
 ```
 
 ## سناریوی دمو
@@ -159,7 +212,71 @@ cd agent && docker build -t ostandari-agent . && lk agent deploy
 
 `agent/.dockerignore` فایل‌های `.env*` را کنار می‌گذارد، پس هیچ کلیدی وارد ایمیج
 نمی‌شود. **توجه:** در کانتینر، ابزار `unblock_user` کار نمی‌کند چون `demo-app/`
-بیرون بستر ساخت ایمیج است — به بخش «نکته‌های مهم» پایین نگاه کنید.
+بیرون بستر ساخت ایمیج است — به بخش «نکته‌های مهم» بالاتر نگاه کنید.
+
+## یکپارچگی پیوسته
+
+| ورک‌فلو | چه زمانی | چه کاری |
+|---|---|---|
+| `build-and-test.yaml` | هر push و PR روی `main` | سه جاب موازی: فرانت‌اند (ESLint، Prettier، build)، اپ دمو (ESLint، build)، ایجنت (`uv sync --locked`، ruff، pytest) |
+| `simulations.yml` | merge به `main` و اجرای دستی | سناریوهای `agent/scenarios.yaml` را روی LiveKit Cloud اجرا می‌کند |
+
+شبیه‌سازی‌ها inference واقعی مصرف می‌کنند، پس روی هر PR اجرا نمی‌شوند. برای فعال
+کردنشان این secretها را در `Settings → Secrets and variables → Actions` تنظیم کنید:
+
+```
+LIVEKIT_URL   LIVEKIT_API_KEY   LIVEKIT_API_SECRET
+OPENAI_API_KEY
+BEY_API_KEY   BEY_AVATAR_ID
+```
+
+اگر تنظیم نشده باشند، ورک‌فلو به‌جای شکست با خطای مبهم، تمیز رد می‌شود.
+
+## Skill عامل‌های کدنویس
+
+مخزن skill رسمی لایوکیت را در دو مسیر دارد تا هر ابزار نسخه‌ی خودش را بخواند:
+`.claude/skills/livekit-agents/` و `.agents/skills/livekit-agents/`. محتوایشان
+عیناً یکسان است؛ اگر یکی را تغییر دادید، دیگری را هم هماهنگ کنید.
+
+اگر با یک عامل کدنویس روی این پروژه کار می‌کنید، **قبل از هر تغییری در ایجنت،
+[`agent/AGENTS.md`](agent/AGENTS.md) را بخوانید.** آن فایل چیزهایی را مستند می‌کند
+که از خواندن کد قابل حدس نیستند — مهم‌ترینش این که نسخه‌ی `livekit-agents` عمداً
+روی ۱.۲.۱۶ پین است و مستندات آنلاین API نسخه‌ی ۱.۸ را توصیف می‌کنند، پس
+نمونه‌کدهای مستندات با این پروژه سازگار نیستند.
+
+## عیب‌یابی
+
+**آواتار وارد اتاق نمی‌شود یا تصویری نمی‌بینم**
+`BEY_API_KEY` و `BEY_AVATAR_ID` را در `agent/.env.local` بررسی کنید. لاگ ایجنت را
+ببینید؛ اگر آواتار وصل نشود، گفت‌وگوی صوتی کار می‌کند ولی تصویری نمایش داده
+نمی‌شود.
+
+**پیام «دستیار وارد اتاق گفت‌وگو نشد»**
+ایجنت در حال اجرا نیست یا با کلیدهای پروژه‌ی دیگری وصل شده. مطمئن شوید
+`LIVEKIT_URL` در `agent/.env.local` و `frontend/.env.local` یکی است، و
+`uv run src/agent.py dev` در حال اجراست.
+
+**بعد از ۱۵ دقیقه اتصال قطع می‌شود و وصل نمی‌شود**
+توکن‌ها TTL پانزده‌دقیقه‌ای دارند و باید خودکار تازه شوند. اگر نمی‌شوند، کنسول
+مرورگر را ببینید؛ خطای `/api/connection-details` معمولاً یعنی کلیدهای
+`frontend/.env.local` تنظیم نشده‌اند.
+
+**ایجنت مسدودیت را برمی‌دارد ولی ورود همچنان رد می‌شود**
+اپ دمو را با `npm run dev` اجرا کرده‌اید؟ در بیلد پروداکشن، `public/` در زمان بیلد
+به `dist/` کپی می‌شود و نوشتن ایجنت روی فایل مبدأ اثری ندارد.
+
+**سناریوی دمو بار دوم کار نمی‌کند**
+`./demo-app/reset-demo.sh` را اجرا کنید تا کاربر دوباره مسدود شود.
+
+**ایجنت انگلیسی جواب می‌دهد**
+`agent/src/prompts.py` را بررسی کنید؛ دستور «همیشه فارسی صحبت کن» باید سر جایش
+باشد. توجه کنید که اگر کاربر گفت‌وگو را به زبان دیگری شروع کند، دستیار عمداً به
+همان زبان ادامه می‌دهد.
+
+**`uv sync` نسخه‌ی ۱.۸ نصب می‌کند**
+نباید این‌طور باشد. پین `~=1.2.16` در `agent/pyproject.toml` باید جلویش را بگیرد.
+اگر تغییرش داده‌اید، `agent/AGENTS.md` را بخوانید — کد با API نسخه‌ی ۱.۸ سازگار
+نیست.
 
 ## لایسنس
 
