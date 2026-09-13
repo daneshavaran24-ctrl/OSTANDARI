@@ -62,11 +62,19 @@ jobs:
         run: npm run build
 
   agent:
-    name: ایجنت (Python)
+    # پروژه محدوده‌ی >=3.11,<3.15 را اعلام می‌کند، پس CI باید واقعاً روی بیش از یک
+    # نسخه اجرا شود؛ وگرنه آن محدوده یک ادعای بی‌پشتوانه است.
+    name: ایجنت (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
     defaults:
       run:
         working-directory: agent
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
     steps:
       - uses: actions/checkout@v4
       - name: Install uv
