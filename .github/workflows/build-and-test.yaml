@@ -69,10 +69,20 @@ jobs:
         working-directory: agent
     steps:
       - uses: actions/checkout@v4
-      - name: Use Python 3.12
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: '3.12'
+          enable-cache: true
+          cache-dependency-glob: agent/uv.lock
 
-      - name: Byte-compile sources
-        run: python -m compileall -q agent.py tools.py prompts.py
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Ruff lint
+        run: uv run ruff check
+
+      - name: Ruff format
+        run: uv run ruff format --check
+
+      - name: Pytest
+        run: uv run pytest -q

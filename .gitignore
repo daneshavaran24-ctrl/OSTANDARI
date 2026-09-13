@@ -56,3 +56,17 @@ lerna-debug.log*
 
 # ---------- پوشش تست ----------
 coverage/
+
+# ---------- ابزارهای عامل کدنویس ----------
+KMS
+.claude/settings.local.json
+.claude/worktrees/
+.codex/config.local.toml
+.gemini/history/
+.gemini/tmp/
+.gemini/google_accounts.json
+.gemini/installation_id
+.gemini/oauth_creds.json
+.cursor/chat/
+.cursor/rules/*.local.mdc
+.github/personal-instructions.md

@@ -35,7 +35,7 @@
 | پوشه | چیست |
 |---|---|
 | `frontend/` | رابط کاربری گفت‌وگو (Next.js 15، React 19). توکن‌سرور LiveKit را هم خودش دارد. |
-| `agent/` | ایجنت صوتی (`livekit-agents` + مدل Realtime اوپن‌ای‌آی + آواتار Beyond Presence) و دو ابزار `unblock_user` و `send_email`. |
+| `agent/` | ایجنت صوتی (`livekit-agents` + مدل Realtime اوپن‌ای‌آی + آواتار Beyond Presence) و دو ابزار `unblock_user` و `send_email`. چیدمانش از قالب رسمی [`agent-starter-python`](https://github.com/livekit-examples/agent-starter-python) پیروی می‌کند؛ جزئیات در [`agent/AGENTS.md`](agent/AGENTS.md). |
 | `demo-app/` | اپ دموی «سامانه‌ی داخلی استانداری» (Vite + React). عمداً یک مشکل ورود دارد تا سناریوی پشتیبانی قابل نمایش باشد. |
 
 ## راه‌اندازی
@@ -67,7 +67,7 @@ cp .env.example frontend/.env.local
 cd demo-app && npm install && npm run dev
 
 # ایجنت
-cd agent && uv sync && uv run agent.py dev
+cd agent && uv sync && uv run src/agent.py dev
 
 # رابط کاربری  →  http://localhost:3000
 cd frontend && pnpm install && pnpm dev
@@ -102,6 +102,11 @@ cd frontend && pnpm install && pnpm dev
 
 ## نکته‌های مهم
 
+- **ابزار رفع مسدودیت در کانتینر کار نمی‌کند.** بستر ساخت ایمیج داکر `agent/`
+  است و `demo-app/public/blockusers.txt` بیرون آن قرار دارد، پس در کانتینر ابزار
+  پیام «فایل پیدا نشد» برمی‌گرداند (کرش نمی‌کند). این محدودیت طبیعی است: ایمیج
+  برای استقرار ایجنت روی LiveKit Cloud است و اپ دمو یک ابزار نمایش محلی. اگر لازم
+  شد، مسیر را با `BLOCK_USERS_FILE` تنظیم کنید.
 - **اپ دمو باید با `npm run dev` اجرا شود، نه `npm run build`.** ایجنت مسدودیت را
   با پاک کردن `demo-app/public/blockusers.txt` روی دیسک برمی‌دارد. در حالت
   توسعه، Vite این فایل را مستقیم از دیسک سرو می‌کند و تغییر بلافاصله دیده
@@ -120,10 +125,41 @@ cd frontend && pnpm install && pnpm dev
 ```bash
 cd frontend && pnpm lint && pnpm format:check && pnpm build
 cd demo-app && npm run lint && npm run build
-cd agent   && python -m compileall agent.py tools.py prompts.py
+cd agent   && uv run ruff check && uv run ruff format --check && uv run pytest -q
 ```
 
 همین‌ها در CI هم اجرا می‌شوند (`.github/workflows/build-and-test.yaml`).
+
+برای ایجنت، `taskfile.yaml` هم میان‌برهای آماده دارد:
+
+| دستور | کار |
+|---|---|
+| `task install` | نصب وابستگی‌ها |
+| `task dev` | اجرای ایجنت در حالت توسعه |
+| `task console` | گفت‌وگو با ایجنت در ترمینال، بدون فرانت‌اند |
+| `task check` | لینت، قالب‌بندی و تست‌ها |
+| `task simulate` | اجرای سناریوهای گفت‌وگو (نیازمند LiveKit CLI) |
+
+### تست ایجنت
+
+تست‌های `agent/tests/test_agent.py` منطق ابزارها را می‌سنجند و هیچ کلید یا شبکه‌ای
+لازم ندارند. رفتار گفت‌وگویی در `agent/scenarios.yaml` پوشش داده می‌شود و برای
+اجرایش به [LiveKit CLI](https://docs.livekit.io/intro/basics/cli/) نسخه ۲.۱۵+ و
+کلیدهای معتبر نیاز دارید:
+
+```bash
+cd agent && lk agent simulate --scenarios scenarios.yaml
+```
+
+### استقرار
+
+```bash
+cd agent && docker build -t ostandari-agent . && lk agent deploy
+```
+
+`agent/.dockerignore` فایل‌های `.env*` را کنار می‌گذارد، پس هیچ کلیدی وارد ایمیج
+نمی‌شود. **توجه:** در کانتینر، ابزار `unblock_user` کار نمی‌کند چون `demo-app/`
+بیرون بستر ساخت ایمیج است — به بخش «نکته‌های مهم» پایین نگاه کنید.
 
 ## لایسنس
 
