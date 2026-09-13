@@ -1,0 +1,72 @@
+# اجرای سناریوهای agent/scenarios.yaml در برابر ایجنت، روی LiveKit Cloud.
+#
+# شبیه‌سازی‌ها inference واقعی مصرف می‌کنند، پس فقط روی merge به main و به‌صورت
+# دستی اجرا می‌شوند، نه روی هر push. حین توسعه، به‌صورت محلی اجرا کنید:
+#   cd agent && lk agent simulate --scenarios scenarios.yaml
+#
+# این ورک‌فلو بدون تنظیم secretها اجرا نمی‌شود و به‌صورت تمیز رد می‌شود.
+# secretهای لازم در Settings → Secrets and variables → Actions:
+#   LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET
+#   OPENAI_API_KEY      ← ایجنت از مدل Realtime اوپن‌ای‌آی استفاده می‌کند
+#   BEY_API_KEY, BEY_AVATAR_ID  ← آواتار Beyond Presence
+name: Simulations
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  simulate:
+    name: شبیه‌سازی گفت‌وگو
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent
+    env:
+      LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
+      LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
+      LIVEKIT_API_SECRET: ${{ secrets.LIVEKIT_API_SECRET }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      BEY_API_KEY: ${{ secrets.BEY_API_KEY }}
+      BEY_AVATAR_ID: ${{ secrets.BEY_AVATAR_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # بدون کلید، شبیه‌سازی به‌جای شکست با خطای مبهم، تمیز رد می‌شود
+      - name: Check required secrets
+        id: secrets
+        run: |
+          if [ -z "${LIVEKIT_URL}" ] || [ -z "${OPENAI_API_KEY}" ]; then
+            echo "secretهای LiveKit یا OpenAI تنظیم نشده‌اند؛ شبیه‌سازی رد شد."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install uv
+        if: steps.secrets.outputs.ready == 'true'
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: agent/uv.lock
+
+      - name: Install dependencies
+        if: steps.secrets.outputs.ready == 'true'
+        run: uv sync --locked
+
+      - name: Download model files
+        if: steps.secrets.outputs.ready == 'true'
+        run: uv run src/agent.py download-files
+
+      - name: Install LiveKit CLI
+        if: steps.secrets.outputs.ready == 'true'
+        run: curl -sSL https://get.livekit.io/cli | bash
+
+      - name: Run simulations
+        if: steps.secrets.outputs.ready == 'true'
+        run: lk agent simulate --scenarios scenarios.yaml
