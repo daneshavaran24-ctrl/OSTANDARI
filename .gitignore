@@ -21,9 +21,13 @@ next-env.d.ts
 __pycache__/
 *.py[cod]
 *$py.class
+*.egg-info/
+.eggs/
 .venv/
 venv/
 .python-version
+.pytest_cache/
+.ruff_cache/
 
 # ---------- متغیرهای محیطی (هرگز کامیت نشوند) ----------
 .env
