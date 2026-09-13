@@ -6,15 +6,17 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
-from typing import Optional
 
 from livekit.agents import RunContext, ToolError, function_tool, get_job_context
 
 logger = logging.getLogger(__name__)
 
 # مسیر فایل کاربران مسدودشده که اپ دمو آن را سرو می‌کند.
-# پیش‌فرض بر اساس چیدمان مونوریپو: agent/ و demo-app/ هم‌سطح‌اند.
-DEFAULT_BLOCK_FILE = Path(__file__).parent.parent / "demo-app" / "public" / "blockusers.txt"
+# این فایل در agent/src/ است، پس parents[2] ریشه‌ی مونوریپو می‌شود:
+#   src/tools.py → parents[0]=src  parents[1]=agent  parents[2]=<ریشه>
+DEFAULT_BLOCK_FILE = (
+    Path(__file__).parents[2] / "demo-app" / "public" / "blockusers.txt"
+)
 
 
 def _block_file() -> Path:
@@ -73,7 +75,9 @@ async def unblock_user(context: RunContext, username: str) -> str:
         logger.info("فایل %s پاک شد", block_file)
     except OSError as e:
         logger.error("خطا در پاک کردن فایل کاربران مسدودشده: %s", e)
-        raise ToolError("در حال حاضر امکان استفاده از ابزار unblock_user وجود ندارد.")
+        raise ToolError(
+            "در حال حاضر امکان استفاده از ابزار unblock_user وجود ندارد."
+        ) from e
 
     try:
         response = await _notify_client({"type": "unblock_user", "username": username})
@@ -94,7 +98,7 @@ async def send_email(
     to_email: str,
     subject: str,
     message: str,
-    cc_email: Optional[str] = None,
+    cc_email: str | None = None,
 ) -> str:
     """
     ارسال ایمیل از طریق Gmail.
@@ -136,7 +140,9 @@ async def send_email(
         logger.info("ایمیل با موفقیت به %s ارسال شد", to_email)
     except smtplib.SMTPAuthenticationError:
         logger.error("احراز هویت Gmail ناموفق بود")
-        return "ارسال ایمیل ناموفق بود: خطای احراز هویت. اطلاعات ورود Gmail را بررسی کنید."
+        return (
+            "ارسال ایمیل ناموفق بود: خطای احراز هویت. اطلاعات ورود Gmail را بررسی کنید."
+        )
     except smtplib.SMTPException as e:
         logger.error("خطای SMTP: %s", e)
         return f"ارسال ایمیل ناموفق بود: خطای SMTP — {e}"
@@ -145,7 +151,9 @@ async def send_email(
         return f"هنگام ارسال ایمیل خطایی رخ داد: {e}"
 
     try:
-        response = await _notify_client({"type": "send_email", "email_address": to_email})
+        response = await _notify_client(
+            {"type": "send_email", "email_address": to_email}
+        )
         logger.info("پاسخ اعلان send_email: %s", response)
         return f"ایمیل به {to_email} ارسال شد و اعلان روی صفحه نمایش داده شد."
     except Exception as rpc_error:
