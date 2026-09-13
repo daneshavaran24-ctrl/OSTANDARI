@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 
-# تصویر رسمی uv روی دبیان Bookworm. نسخه‌ی پایتون روی ۳.۱۲ است چون
-# pyproject.toml همین را الزام می‌کند (requires-python = ">=3.12") و چرخه‌ی
-# وابستگی‌های livekit-agents 1.2.16 روی ۳.۱۴ آزموده نشده است.
+# تصویر رسمی uv روی دبیان Bookworm. نسخه‌ی پایتون روی ۳.۱۲ است: هم
+# pyproject.toml همین را الزام می‌کند (requires-python = ">=3.12") و هم چرخه‌ی
+# وابستگی‌ها روی همین نسخه در توسعه آزموده شده است.
 ARG PYTHON_VERSION=3.12
 FROM ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-bookworm-slim AS base
 
@@ -37,13 +37,14 @@ RUN mkdir -p src
 # uv.lock باید در مخزن کامیت شده باشد.
 RUN uv sync --locked --no-dev
 
+# پیش‌دانلود فایل‌های مدل پلاگین‌ها.
+# دستور سطح-ماژول، پلاگین‌های نصب‌شده‌ی livekit-plugins-* را پیدا می‌کند بدون
+# اینکه کد ایجنت را بارگذاری کند، پس نیازی به کلید ندارد و می‌تواند قبل از
+# COPY . . اجرا شود تا لایه‌اش با تغییر کد باطل نشود.
+RUN uv run --no-dev --frozen --module livekit.agents download-files
+
 # کپی بقیه‌ی فایل‌ها (با توجه به .dockerignore)
 COPY . .
-
-# پیش‌دانلود فایل‌های مدل پلاگین‌ها، بعد از کپی سورس چون این دستور کد ایجنت را
-# ایمپورت می‌کند. در صورت شکست، بیلد نمی‌شکند و فقط کولد-استارت کندتر می‌شود.
-RUN uv run --no-dev --frozen src/agent.py download-files || \
-    echo "هشدار: پیش‌دانلود فایل‌ها انجام نشد؛ در اولین اجرا دانلود می‌شوند."
 
 # --- مرحله‌ی نهایی ---
 # ابزارهای کامپایل (gcc, g++, python3-dev) در ایمیج نهایی نیستند

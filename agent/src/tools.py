@@ -7,6 +7,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
 
+from livekit import rtc
 from livekit.agents import RunContext, ToolError, function_tool, get_job_context
 
 logger = logging.getLogger(__name__)
@@ -27,14 +28,17 @@ def _human_participant_identity() -> str:
     """
     هویتِ کاربر انسانی داخل اتاق را برمی‌گرداند.
 
-    آواتار Beyond Presence هم خودش یک participant مستقل است، پس نمی‌توان صرفاً
-    اولین عضو remote_participants را برداشت؛ باید participantهای نوع «ایجنت»
-    کنار گذاشته شوند.
+    آواتار Beyond Presence هم خودش یک participant مستقل است و با
+    `.with_kind("agent")` وارد اتاق می‌شود، پس نمی‌توان صرفاً اولین عضو
+    remote_participants را برداشت — بسته به ترتیب ورود ممکن است آواتار باشد.
+
+    مقایسه با enum عددی protobuf انجام می‌شود، نه با نام رشته‌ای: مقدار
+    `participant.kind` یک int است (PARTICIPANT_KIND_AGENT برابر ۴) و
+    str() گرفتن از آن «4» می‌دهد، نه چیزی که به AGENT ختم شود.
     """
     room = get_job_context().room
     for identity, participant in room.remote_participants.items():
-        kind = getattr(participant, "kind", None)
-        if kind is not None and str(kind).upper().endswith("AGENT"):
+        if participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_AGENT:
             continue
         return identity
     raise ToolError("هیچ کاربری در اتاق حضور ندارد تا اعلان برایش ارسال شود.")

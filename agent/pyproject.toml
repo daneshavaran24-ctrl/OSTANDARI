@@ -9,9 +9,8 @@ description = "دستیار صوتی پشتیبانی فنی استانداری�
 requires-python = ">=3.12"
 
 dependencies = [
-    # نسخه عمداً روی 1.2.x قفل است — جزئیات و دلیلش در AGENTS.md
-    "livekit-agents[bey,openai]~=1.2.16",
-    "livekit-plugins-noise-cancellation~=0.2",
+    "livekit-agents[bey,openai]~=1.8.1",
+    "livekit-plugins-ai-coustics~=0.2",
     "python-dotenv>=1.2.1",
 ]
 

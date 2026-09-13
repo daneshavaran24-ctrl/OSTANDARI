@@ -12,13 +12,23 @@ import types
 from pathlib import Path
 
 import pytest
+from livekit import rtc
 
 import tools
 from tools import ToolError
 
 
 class FakeParticipant:
-    def __init__(self, kind: str) -> None:
+    """
+    participant جعلی با مقدار واقعی `kind`.
+
+    نکته‌ی مهم: `kind` باید همان enum عددی protobuf باشد که کتابخانه می‌دهد، نه یک
+    رشته‌ی ساختگی. نسخه‌ی قبلی این تست رشته‌ی "ParticipantKind.AGENT" می‌داد و به
+    همین دلیل یک فیلتر غلط را سبز نشان می‌داد: کد، `kind` را با endswith("AGENT")
+    می‌سنجید که برای مقدار واقعی (عدد ۴) هیچ‌وقت درست نمی‌شد.
+    """
+
+    def __init__(self, kind: int) -> None:
         self.kind = kind
 
 
@@ -46,8 +56,9 @@ def room(monkeypatch):
     return _set
 
 
-AVATAR = FakeParticipant("ParticipantKind.AGENT")
-HUMAN = FakeParticipant("ParticipantKind.STANDARD")
+# آواتار Beyond Presence با kind="agent" وارد اتاق می‌شود
+AVATAR = FakeParticipant(rtc.ParticipantKind.PARTICIPANT_KIND_AGENT)
+HUMAN = FakeParticipant(rtc.ParticipantKind.PARTICIPANT_KIND_STANDARD)
 
 
 # --------------------------------------------------------------------------
@@ -94,6 +105,19 @@ def test_picks_human_when_avatar_joined_first(room):
     کد اولیه اولین عضو remote_participants را برمی‌داشت و در این ترتیب، اعلان را
     به آواتار می‌فرستاد نه به کاربر.
     """
+    room({"bey-avatar-abc": AVATAR, "voice_assistant_user_42": HUMAN})
+    assert tools._human_participant_identity() == "voice_assistant_user_42"
+
+
+def test_avatar_kind_is_not_detectable_as_a_string(room):
+    """
+    نگهبان رگرسیون: مقدار واقعی `kind` یک عدد است، نه رشته.
+
+    اگر کسی فیلتر را به مقایسه‌ی رشته‌ای برگرداند (مثلاً
+    str(kind).endswith("AGENT")) این تست می‌شکند، چون str(4) برابر "4" است و
+    آواتار دیگر کنار گذاشته نمی‌شود.
+    """
+    assert str(AVATAR.kind).upper().endswith("AGENT") is False
     room({"bey-avatar-abc": AVATAR, "voice_assistant_user_42": HUMAN})
     assert tools._human_participant_identity() == "voice_assistant_user_42"
 
@@ -194,8 +218,7 @@ async def test_send_email_requires_credentials(monkeypatch):
 # مستندات: https://docs.livekit.io/agents/start/testing/
 #
 # import pytest
-# from livekit.agents import AgentSession
-# from livekit.plugins import openai
+# from livekit.agents import AgentSession, inference
 #
 # from agent import Assistant
 #
@@ -204,7 +227,7 @@ async def test_send_email_requires_credentials(monkeypatch):
 # async def test_greets_in_persian() -> None:
 #     """ایجنت باید گفت‌وگو را به فارسی شروع کند."""
 #     async with (
-#         openai.LLM(model="gpt-4.1-mini") as judge_llm,
+#         inference.LLM(model="openai/gpt-4.1-mini") as judge_llm,
 #         AgentSession() as session,
 #     ):
 #         await session.start(Assistant())

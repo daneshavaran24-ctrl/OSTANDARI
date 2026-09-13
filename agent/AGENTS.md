@@ -12,26 +12,56 @@
 | `../frontend/` | رابط کاربری گفت‌وگو با Next.js 15 | `pnpm`، ESLint، Prettier |
 | `../demo-app/` | اپ دموی «سامانه‌ی دارای مشکل» با Vite | `npm`، ESLint |
 
-## 🔴 نسخه‌ی livekit-agents را ارتقا ندهید
+## پشته‌ی فعلی
 
-`pyproject.toml` عمداً روی `livekit-agents[bey,openai]~=1.2.16` پین است، یعنی
-`>=1.2.16, <1.3.0`.
+پروژه روی API نسخه‌ی ۱.۸ لایوکیت است — همان چیزی که قالب رسمی
+`agent-starter-python` نشان می‌دهد، پس نمونه‌کدهای مستندات با این کد می‌خوانند.
 
-آخرین نسخه‌ی منتشرشده ۱.۸.x است و **API کاملاً متفاوتی دارد**. قالب رسمی
-`agent-starter-python` هم همان API جدید را نشان می‌دهد، پس اگر از آن قالب الگو
-می‌گیرید، کدش با این پروژه سازگار نیست:
-
-| | این پروژه (۱.۲) | نسخه‌ی ۱.۸ |
+| جزء | انتخاب | چرا |
 |---|---|---|
-| نقطه‌ی ورود | `cli.run_app(WorkerOptions(entrypoint_fnc=…))` | `AgentServer()` + `@server.rtc_session(...)` |
-| ورودی اتاق | `RoomInputOptions(noise_cancellation=…)` | `room_io.RoomOptions(audio_input=…)` |
-| مدل‌ها | `openai.realtime.RealtimeModel(...)` | `inference.LLM/STT/TTS` |
-| اتصال | ضمنی در `session.start` | `await ctx.connect()` |
+| `livekit-agents` | `[bey,openai]~=1.8.1` | `~=` محدوده را روی ۱.۸.x نگه می‌دارد، پس ارتقای مینور خودکار اتفاق نمی‌افتد |
+| مدل | `openai.realtime.RealtimeModel` با `gpt-realtime` | صدا → استدلال → صدا، بدون زنجیره‌ی STT/TTS |
+| صدا | `cedar` | لحن مردانه‌ی بم که پرامپت فارسی توصیفش می‌کند |
+| نویزگیری | `ai_coustics.audio_enhancement(QUAIL_VF_S)` | از اعتبارنامه‌ی LiveKit Cloud استفاده می‌کند و کلید جدا نمی‌خواهد |
+| آواتار | `bey.AvatarSession` | Beyond Presence |
 
-پیش از پین کردن، محدوده `~=1.2` بود که تا ۱.۹۹ را مجاز می‌کرد؛ یک `uv lock` تازه
-می‌پرید روی ۱.۸ و کد را می‌شکست. اگر واقعاً قصد مهاجرت دارید، آن یک کار مستقل و
-عمدی است — نه اثر جانبی به‌روزرسانی وابستگی‌ها — و آواتار، مدل Realtime و هر دو
-ابزار باید بازنویسی و دوباره آزموده شوند.
+مدل و صدا از طریق `OPENAI_REALTIME_MODEL` و `OPENAI_VOICE` قابل تغییرند.
+
+### ترتیب راه‌اندازی در `src/agent.py` تصادفی نیست
+
+```
+session.start()  →  avatar.start()  →  ctx.connect()  →  background_audio.start()
+```
+
+- `avatar.start()` باید **بعد از** `session.start()` بیاید، چون خروجی صدای نشست را
+  با `replace_audio_tail` جایگزین می‌کند؛ اگر زودتر اجرا شود نشستی برای جایگزینی
+  وجود ندارد.
+- `background_audio.start()` باید **بعد از** `ctx.connect()` بیاید، چون یک ترک
+  صوتی روی اتاق منتشر می‌کند و اتاق باید وصل باشد.
+
+### راستی‌آزمایی API
+
+مستندات آنلاین همین نسخه را توصیف می‌کنند، ولی برای امضای دقیق توابع، سورس
+نصب‌شده در `.venv` مرجع قطعی است:
+
+```bash
+uv run python -c "import inspect; from livekit.plugins import bey; print(inspect.signature(bey.AvatarSession.start))"
+```
+
+### ⚠️ `participant.kind` یک عدد است، نه رشته
+
+`src/tools.py` برای پیدا کردن کاربر انسانی، participantهای نوع ایجنت را کنار
+می‌گذارد (آواتار Beyond Presence با `.with_kind("agent")` وارد می‌شود). مقایسه
+**باید** با enum عددی protobuf باشد:
+
+```python
+if participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_AGENT:
+```
+
+مقدار واقعی عدد ۴ است. اگر این را به مقایسه‌ی رشته‌ای برگردانید
+(`str(kind).endswith("AGENT")`) بی‌صدا از کار می‌افتد، آواتار کنار گذاشته نمی‌شود و
+اعلان‌ها به مقصد اشتباه می‌روند. تست `test_avatar_kind_is_not_detectable_as_a_string`
+نگهبان همین مورد است.
 
 ## ساختار پروژه
 
@@ -137,16 +167,13 @@ lk agent deploy
 حساسیت به تأخیر، کوچک نگه داشتن context، استفاده از handoff و task، و الزام نوشتن
 تست — برای این پروژه هم معتبرند.
 
-**ولی در دو مورد با این پروژه نمی‌خواند، و در آن دو مورد همین فایل اولویت دارد:**
+**یک مورد با این پروژه نمی‌خواند، و در آن مورد همین فایل اولویت دارد:**
 
-1. skill می‌گوید «همیشه APIها را با مستندات زنده راستی‌آزمایی کن». درست است، اما
-   مستندات آنلاین API نسخه‌ی ۱.۸ را توصیف می‌کنند و این پروژه روی ۱.۲.۱۶ پین است
-   (بخش بالا). برای API نسخه‌ی ۱.۲ مرجع معتبر، سورس نصب‌شده در `.venv` است نه
-   docs.livekit.io.
-2. skill استفاده از LiveKit Inference را توصیه می‌کند. این پروژه مستقیماً از مدل
-   Realtime اوپن‌ای‌آی و آواتار Beyond Presence استفاده می‌کند، یعنی به
-   `OPENAI_API_KEY` و `BEY_API_KEY` جدا نیاز دارد. مهاجرت به Inference یک تصمیم
-   مستقل است، نه اصلاح جانبی.
+skill استفاده از LiveKit Inference را توصیه می‌کند، ولی این پروژه مستقیماً از
+مدل Realtime اوپن‌ای‌آی و آواتار Beyond Presence استفاده می‌کند و به
+`OPENAI_API_KEY` و `BEY_API_KEY` جدا نیاز دارد. مهاجرت به Inference یک تصمیم
+مستقل است، نه اصلاح جانبی — مدل Realtime یک پارچه صدا-به-صدا است و معادل مستقیمی
+در Inference ندارد.
 
 ## مستندات LiveKit
 
@@ -158,9 +185,9 @@ LiveKit Agents سریع تغییر می‌کند. برای مرور مستندا
   روی لینوکس، `winget install LiveKit.LiveKitCLI` روی ویندوز.
 - **MCP Server:** `https://docs.livekit.io/mcp` با ترانسپورت Streamable HTTP.
 
-**توجه:** مستندات آنلاین API نسخه‌ی ۱.۸ را توصیف می‌کند. هنگام خواندنشان حتماً
-بخش «نسخه را ارتقا ندهید» بالا را در نظر بگیرید و نمونه‌کدها را مستقیماً کپی
-نکنید. برای API نسخه‌ی ۱.۲ مطمئن‌ترین مرجع، خودِ سورس نصب‌شده در `.venv` است.
+مستندات آنلاین همین نسخه‌ای را توصیف می‌کنند که پروژه استفاده می‌کند، پس
+نمونه‌کدها قابل استفاده‌اند. برای امضای دقیق توابع، سورس نصب‌شده در `.venv`
+مرجع قطعی است.
 
 اگر از CLI یا MCP برای جست‌وجوی مستندات استفاده کردید، بازخورد سازنده را با
 `lk docs submit-feedback` یا ابزار `submit_docs_feedback` به LiveKit بفرستید.
