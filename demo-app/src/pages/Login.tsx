@@ -39,7 +39,7 @@ const Login = () => {
     const isBlocked = await checkBlockedUser(username);
     
     if (isBlocked) {
-      setError("Your account has been blocked. Please reach out to support for help.");
+      setError("حساب کاربری شما مسدود شده است. برای رفع مشکل با پشتیبانی تماس بگیرید.");
       setLoading(false);
       return;
     }
@@ -53,7 +53,7 @@ const Login = () => {
       localStorage.setItem("username", username);
       navigate("/dashboard");
     } else {
-      setError("Invalid username or password. Please try again.");
+      setError("نام کاربری یا رمز عبور نادرست است. دوباره تلاش کنید.");
     }
     
     setLoading(false);
@@ -64,39 +64,44 @@ const Login = () => {
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="space-y-2 text-center">
           <div className="mx-auto w-16 h-16 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-2">
-            <span className="text-xl font-bold text-primary-foreground">GCA</span>
+            <span className="text-xl font-bold text-primary-foreground">اس</span>
           </div>
-          <CardTitle className="text-2xl font-bold">GenericCorporateApp</CardTitle>
-          <CardDescription>Sign in to your account</CardDescription>
+          <CardTitle className="text-2xl font-bold">سامانه‌ی داخلی استانداری</CardTitle>
+          <CardDescription>به حساب کاربری خود وارد شوید</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="username">نام کاربری</Label>
               <Input
                 id="username"
                 type="text"
+                dir="ltr"
                 placeholder="\domain\username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
-                className="transition-all"
+                className="text-left transition-all"
               />
               <p className="text-sm text-muted-foreground">
-                Type in your username like this: <span className="font-mono">\domain\username</span>
+                نام کاربری را دقیقاً به این شکل وارد کنید:{" "}
+                <span className="font-mono" dir="ltr">
+                  \domain\username
+                </span>
               </p>
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">رمز عبور</Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="Enter your password"
+                dir="ltr"
+                placeholder="رمز عبور خود را وارد کنید"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="transition-all"
+                className="text-left transition-all"
               />
             </div>
 
@@ -112,7 +117,7 @@ const Login = () => {
               className="w-full" 
               disabled={loading}
             >
-              {loading ? "Signing in..." : "Sign in"}
+              {loading ? "در حال ورود…" : "ورود"}
             </Button>
           </form>
         </CardContent>

@@ -23,10 +23,10 @@ const Dashboard = () => {
   };
 
   const statsCards = [
-    { title: "Total Users", value: "2,543", icon: Users, change: "+12%" },
-    { title: "Active Sessions", value: "847", icon: BarChart3, change: "+5%" },
-    { title: "Reports", value: "124", icon: FileText, change: "+23%" },
-    { title: "System Status", value: "Healthy", icon: Settings, change: "100%" },
+    { title: "کل کاربران", value: (2543).toLocaleString("fa-IR"), icon: Users, change: "+۱۲٪" },
+    { title: "نشست‌های فعال", value: (847).toLocaleString("fa-IR"), icon: BarChart3, change: "+۵٪" },
+    { title: "گزارش‌ها", value: (124).toLocaleString("fa-IR"), icon: FileText, change: "+۲۳٪" },
+    { title: "وضعیت سامانه", value: "سالم", icon: Settings, change: "۱۰۰٪" },
   ];
 
   return (
@@ -36,9 +36,9 @@ const Dashboard = () => {
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-              <span className="text-sm font-bold text-primary-foreground">GCA</span>
+              <span className="text-sm font-bold text-primary-foreground">اس</span>
             </div>
-            <h1 className="text-2xl font-bold">GenericCorporateApp</h1>
+            <h1 className="text-2xl font-bold">سامانه‌ی داخلی استانداری</h1>
           </div>
           <Button 
             variant="outline" 
@@ -46,7 +46,7 @@ const Dashboard = () => {
             className="gap-2"
           >
             <LogOut className="h-4 w-4" />
-            Sign out
+            خروج
           </Button>
         </div>
       </header>
@@ -56,10 +56,10 @@ const Dashboard = () => {
         {/* Welcome Section */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold mb-2">
-            Welcome back, {displayName}!
+            {displayName} عزیز، خوش آمدید!
           </h2>
           <p className="text-muted-foreground">
-            Here's what's happening with your account today.
+            وضعیت امروز حساب کاربری شما به این شکل است.
           </p>
         </div>
 
@@ -78,7 +78,7 @@ const Dashboard = () => {
                 <CardContent>
                   <div className="text-2xl font-bold">{stat.value}</div>
                   <p className="text-xs text-muted-foreground">
-                    <span className="text-primary">{stat.change}</span> from last month
+                    <span className="text-primary">{stat.change}</span> نسبت به ماه گذشته
                   </p>
                 </CardContent>
               </Card>
@@ -89,16 +89,16 @@ const Dashboard = () => {
         {/* Recent Activity */}
         <Card>
           <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Your latest system interactions</CardDescription>
+            <CardTitle>فعالیت‌های اخیر</CardTitle>
+            <CardDescription>آخرین تعامل‌های شما با سامانه</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {[
-                { action: "Logged in", time: "2 minutes ago", status: "success" },
-                { action: "Updated profile settings", time: "1 hour ago", status: "info" },
-                { action: "Generated report", time: "3 hours ago", status: "success" },
-                { action: "System backup completed", time: "5 hours ago", status: "success" },
+                { action: "ورود به سامانه", time: "۲ دقیقه پیش", status: "success" },
+                { action: "به‌روزرسانی تنظیمات نمایه", time: "۱ ساعت پیش", status: "info" },
+                { action: "تولید گزارش", time: "۳ ساعت پیش", status: "success" },
+                { action: "پشتیبان‌گیری سامانه", time: "۵ ساعت پیش", status: "success" },
               ].map((activity, index) => (
                 <div 
                   key={index} 

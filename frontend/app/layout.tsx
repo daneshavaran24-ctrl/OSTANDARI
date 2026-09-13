@@ -1,4 +1,4 @@
-import { Public_Sans } from 'next/font/google';
+import { Vazirmatn } from 'next/font/google';
 import localFont from 'next/font/local';
 import { headers } from 'next/headers';
 import { APP_CONFIG_DEFAULTS } from '@/app-config';
@@ -6,9 +6,12 @@ import { ApplyThemeScript, ThemeToggle } from '@/components/theme-toggle';
 import { getAppConfig } from '@/lib/utils';
 import './globals.css';
 
-const publicSans = Public_Sans({
+// وزیرمتن فونت پیش‌فرض فارسی است؛ زیرمجموعه‌ی latin هم بارگذاری می‌شود تا
+// نام‌های کاربری و نشانی‌های ایمیل لاتین با همین فونت رندر شوند.
+const vazirmatn = Vazirmatn({
   variable: '--font-public-sans',
-  subsets: ['latin'],
+  subsets: ['arabic', 'latin'],
+  display: 'swap',
 });
 
 const commitMono = localFont({
@@ -59,7 +62,7 @@ export default async function RootLayout({ children }: RootLayoutProps) {
     .join('\n');
 
   return (
-    <html lang="en" suppressHydrationWarning className="scroll-smooth">
+    <html lang="fa" dir="rtl" suppressHydrationWarning className="scroll-smooth">
       <head>
         {styles && <style>{styles}</style>}
         <title>{pageTitle}</title>
@@ -67,7 +70,7 @@ export default async function RootLayout({ children }: RootLayoutProps) {
         <ApplyThemeScript />
       </head>
       <body
-        className={`${publicSans.variable} ${commitMono.variable} overflow-x-hidden antialiased`}
+        className={`${vazirmatn.variable} ${commitMono.variable} overflow-x-hidden antialiased`}
       >
         {children}
         <div className="group fixed bottom-0 left-1/2 z-50 mb-2 -translate-x-1/2">

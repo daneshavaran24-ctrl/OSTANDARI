@@ -53,23 +53,15 @@ export const SessionView = ({
         if (!isAgentAvailable(agentState)) {
           const reason =
             agentState === 'connecting'
-              ? 'Agent did not join the room. '
-              : 'Agent connected but did not complete initializing. ';
+              ? 'دستیار وارد اتاق گفت‌وگو نشد. '
+              : 'دستیار متصل شد ولی راه‌اندازی‌اش کامل نشد. ';
 
           toastAlert({
-            title: 'Session ended',
+            title: 'گفت‌وگو پایان یافت',
             description: (
               <p className="w-full">
                 {reason}
-                <a
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  href="https://docs.livekit.io/agents/start/voice-ai/"
-                  className="whitespace-nowrap underline"
-                >
-                  See quickstart guide
-                </a>
-                .
+                مطمئن شوید سرویس ایجنت در حال اجراست و دوباره تلاش کنید.
               </p>
             ),
           });
@@ -121,14 +113,14 @@ export const SessionView = ({
         </div>
       </ChatMessageView>
 
-      <div className="bg-background mp-12 fixed top-0 right-0 left-0 h-32 md:h-36">
+      <div className="bg-background mp-12 fixed inset-x-0 top-0 h-32 md:h-36">
         {/* skrim */}
-        <div className="from-background absolute bottom-0 left-0 h-12 w-full translate-y-full bg-gradient-to-b to-transparent" />
+        <div className="from-background absolute inset-x-0 bottom-0 h-12 w-full translate-y-full bg-gradient-to-b to-transparent" />
       </div>
 
       <MediaTiles chatOpen={chatOpen} />
 
-      <div className="bg-background fixed right-0 bottom-0 left-0 z-50 px-3 pt-2 pb-3 md:px-12 md:pb-12">
+      <div className="bg-background fixed inset-x-0 bottom-0 z-50 px-3 pt-2 pb-3 md:px-12 md:pb-12">
         <motion.div
           key="control-bar"
           initial={{ opacity: 0, translateY: '100%' }}
@@ -157,7 +149,7 @@ export const SessionView = ({
                 )}
               >
                 <p className="animate-text-shimmer inline-block !bg-clip-text text-sm font-semibold text-transparent">
-                  Agent is listening, ask it a question
+                  دستیار در حال شنیدن است؛ پرسشتان را بپرسید
                 </p>
               </motion.div>
             )}
@@ -169,7 +161,7 @@ export const SessionView = ({
             />
           </div>
           {/* skrim */}
-          <div className="from-background border-background absolute top-0 left-0 h-12 w-full -translate-y-full bg-gradient-to-t to-transparent" />
+          <div className="from-background border-background absolute inset-x-0 top-0 h-12 w-full -translate-y-full bg-gradient-to-t to-transparent" />
         </motion.div>
       </div>
     </main>

@@ -38,7 +38,7 @@ export function ChatInput({ onSend, className, disabled, ...props }: ChatInputPr
         type="text"
         value={message}
         disabled={disabled}
-        placeholder="Type something..."
+        placeholder="پیامتان را بنویسید…"
         onChange={(e) => setMessage(e.target.value)}
         className="flex-1 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
       />
@@ -49,7 +49,7 @@ export function ChatInput({ onSend, className, disabled, ...props }: ChatInputPr
         disabled={isDisabled}
         className="font-mono"
       >
-        SEND
+        ارسال
       </Button>
     </form>
   );

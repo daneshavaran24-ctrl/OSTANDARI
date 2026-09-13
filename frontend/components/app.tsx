@@ -31,7 +31,7 @@ export function App({ appConfig }: AppProps) {
     };
     const onMediaDevicesError = (error: Error) => {
       toastAlert({
-        title: 'Encountered an error with your media devices',
+        title: 'خطا در دسترسی به میکروفون یا دوربین',
         description: `${error.name}: ${error.message}`,
       });
     };
@@ -64,7 +64,7 @@ export function App({ appConfig }: AppProps) {
         }
 
         toastAlert({
-          title: 'There was an error connecting to the agent',
+          title: 'خطا در اتصال به دستیار',
           description: `${error.name}: ${error.message}`,
         });
       });

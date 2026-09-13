@@ -92,7 +92,10 @@ function scaleImageSize(size: { width: number; height: number }, desiredHeight: 
 
 function cleanPageTitle(appName: string) {
   if (appName === APP_CONFIG_DEFAULTS.pageTitle) {
-    return 'Voice agent';
+    // فونت‌های این تصویر (Everett و CommitMono) گلیف فارسی ندارند و Satori
+    // متن فارسی را به‌صورت مربع خالی رندر می‌کند، پس عنوان پیش‌فرض کارت
+    // اشتراک‌گذاری عمداً لاتین نگه داشته شده است.
+    return 'Ostandari Support';
   }
 
   return appName;
