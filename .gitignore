@@ -1,0 +1,58 @@
+# ---------- وابستگی‌ها ----------
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# ---------- خروجی بیلد ----------
+.next/
+out/
+build/
+dist/
+dist-ssr/
+*.tsbuildinfo
+next-env.d.ts
+
+# ---------- پایتون ----------
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.python-version
+
+# ---------- متغیرهای محیطی (هرگز کامیت نشوند) ----------
+.env
+.env.*
+!.env.example
+*.local
+!blockusers.txt
+
+# ---------- ابزارها و ویرایشگر ----------
+.vercel
+.DS_Store
+*.pem
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ---------- لاگ‌ها ----------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ---------- پوشش تست ----------
+coverage/
