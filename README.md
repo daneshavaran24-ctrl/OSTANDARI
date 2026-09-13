@@ -75,7 +75,7 @@ OSTANDARI/
 | [Node.js](https://nodejs.org) | ۲۲+ | `frontend/` و `demo-app/` |
 | [pnpm](https://pnpm.io) | ۹+ | `frontend/` |
 | [uv](https://docs.astral.sh/uv/) | آخرین | `agent/` |
-| Python | ۳.۱۲+ | `agent/` (uv خودش نصبش می‌کند) |
+| Python | ۳.۱۱ تا ۳.۱۴ | `agent/` (uv خودش نصبش می‌کند) |
 | [LiveKit CLI](https://docs.livekit.io/intro/basics/cli/) | ۲.۱۵+ | اختیاری — شبیه‌سازی و استقرار |
 | [Task](https://taskfile.dev) | ۳+ | اختیاری — میان‌برهای `agent/taskfile.yaml` |
 
@@ -126,6 +126,38 @@ cd frontend && pnpm install && pnpm dev
 cd agent && uv run src/agent.py console
 ```
 
+## توسعه روی ویندوز
+
+هر سه بخش روی ویندوز کار می‌کنند و **همان دستورهای بالا بی‌تغییر در PowerShell
+اجرا می‌شوند** — چون `uv run`، `pnpm` و `npm` خودشان محیط را پیدا می‌کنند و نیازی
+به فعال‌سازی دستی venv نیست.
+
+دو تفاوت عملی:
+
+**۱. بازنشانی دمو.** اسکریپت `reset-demo.sh` یک اسکریپت bash است و در PowerShell
+اجرا نمی‌شود. معادل ویندوزی‌اش در کنارش هست:
+
+```powershell
+.\demo-app\reset-demo.ps1
+```
+
+هر دو اسکریپت بایت‌به‌بایت یک خروجی می‌دهند (بدون BOM، پایان خط یونیکس).
+
+**۲. فعال‌سازی دستی venv**، اگر لازم شد. مسیر روی ویندوز `Scripts\` است نه `bin/`:
+
+```powershell
+cd agent
+uv sync
+.\.venv\Scripts\Activate.ps1
+```
+
+ولی با `uv run src/agent.py dev` یا `task dev` هیچ‌وقت به این نیاز پیدا نمی‌کنید.
+
+> **پوشه‌ی `.venv` را کامیت نکنید.** از قبل در `.gitignore` است و uv هم خودش یک
+> `.gitignore` با محتوای `*` داخلش می‌گذارد. روی ویندوز حجمش حدود ۲۸ مگابایت فایل
+> اجرایی است (`python.exe`، `ruff.exe` و بقیه) که روی هیچ سیستم دیگری کار
+> نمی‌کند و با یک `uv sync` در چند ثانیه بازساخته می‌شود.
+
 ## سناریوی دمو
 
 ۱. در `http://localhost:8080` با این اطلاعات وارد شوید:
@@ -150,7 +182,8 @@ cd agent && uv run src/agent.py console
 برای اجرای دوباره‌ی سناریو، کاربر را دوباره مسدود کنید:
 
 ```bash
-./demo-app/reset-demo.sh
+./demo-app/reset-demo.sh          # لینوکس و مک
+.\demo-app\reset-demo.ps1        # ویندوز (PowerShell)
 ```
 
 ## نکته‌های مهم
