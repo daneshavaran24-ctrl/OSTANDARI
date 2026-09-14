@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { DEFAULT_SESSION_SECONDS, SHORT_SESSION_THRESHOLD } from '@/lib/session-defaults';
 
 const FIELDS = [
   { key: 'session_duration_seconds', label: 'مدت هر گفت‌وگو (ثانیه)', type: 'number' },
@@ -40,16 +41,17 @@ export default function SettingsPage() {
     setStatus(res?.ok ? 'تنظیمات ذخیره شد.' : (body?.error ?? 'ذخیره ناموفق بود.'));
   }
 
-  const duration = Number(settings.session_duration_seconds ?? 30);
+  const duration = Number(settings.session_duration_seconds ?? DEFAULT_SESSION_SECONDS);
 
   return (
     <form onSubmit={save} className="space-y-6">
       <h1 className="text-xl font-bold">تنظیمات</h1>
 
-      {duration > 0 && duration < 120 && (
+      {duration > 0 && duration < SHORT_SESSION_THRESHOLD && (
         <p className="border-separatorModerate bg-bgModerate text-fgModerate rounded-md border p-3 text-sm">
           با مدت {duration} ثانیه، گردش‌کار کامل پشتیبانی (گرفتن ایمیل و ثبت تیکت) جا نمی‌شود و
-          دستیار عمداً کوتاه پاسخ می‌دهد. برای استفاده‌ی واقعی مدت را بیشتر کنید.
+          دستیار عمداً کوتاه پاسخ می‌دهد. این حالت برای نمایش کیوسکی مناسب است؛ برای استفاده‌ی واقعی
+          مدت را دست‌کم {SHORT_SESSION_THRESHOLD} ثانیه بگذارید.
         </p>
       )}
 

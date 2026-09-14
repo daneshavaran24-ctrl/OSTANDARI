@@ -48,7 +48,7 @@ test.describe('تنظیمات', () => {
     await login(page);
 
     const field = page.getByLabel('مدت هر گفت‌وگو (ثانیه)');
-    await expect(field).toHaveValue('30');
+    await expect(field).toHaveValue('300');
     await field.fill('75');
     await page.getByRole('button', { name: 'ذخیره' }).click();
     await expect(page.getByRole('status')).toContainText('ذخیره شد');

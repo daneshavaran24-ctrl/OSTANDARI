@@ -12,7 +12,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 // node:sqlite از Node 22.5 اضافه شده است. بدون این بررسی، نسخه‌های قدیمی‌تر
 // خطای مبهم ERR_UNKNOWN_BUILTIN_MODULE می‌دهند که ربطش به نسخه‌ی Node معلوم
@@ -53,7 +53,7 @@ if (!current) {
 const seeded = db.prepare('SELECT COUNT(*) AS n FROM settings').get();
 if (seeded.n === 0) {
   const setting = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
-  setting.run('session_duration_seconds', '30');
+  setting.run('session_duration_seconds', '300');
   setting.run('record_transcripts', '1');
   setting.run('transcript_retention_days', '30');
 

@@ -28,7 +28,7 @@ load_dotenv(".env.local")
 logger = logging.getLogger("agent")
 logger.setLevel(logging.INFO)
 
-DEFAULT_SESSION_SECONDS = 30
+DEFAULT_SESSION_SECONDS = 300
 
 
 class Assistant(Agent):

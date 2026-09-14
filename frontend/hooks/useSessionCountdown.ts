@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-
-const DEFAULT_SECONDS = 30;
+import { DEFAULT_SESSION_SECONDS } from '@/lib/session-defaults';
 
 /**
  * مدت مجاز هر گفت‌وگو را از سرور می‌گیرد.
@@ -9,7 +8,7 @@ const DEFAULT_SECONDS = 30;
  * می‌شود، چون هر کسی می‌تواند جاوااسکریپت مرورگر را دور بزند.
  */
 export function useSessionDuration(): number {
-  const [seconds, setSeconds] = useState(DEFAULT_SECONDS);
+  const [seconds, setSeconds] = useState(DEFAULT_SESSION_SECONDS);
 
   useEffect(() => {
     let cancelled = false;

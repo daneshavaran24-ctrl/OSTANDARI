@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { DEFAULT_SESSION_SECONDS } from './session-defaults';
 
 /**
  * دسترسی پنل ادمین به پایگاه داده‌ی مشترک.
@@ -10,7 +11,7 @@ import { DatabaseSync } from 'node:sqlite';
  * اینکه یک دیتابیس خالی بسازد و ادمین فکر کند چیزی کار می‌کند.
  */
 
-export const EXPECTED_SCHEMA_VERSION = 1;
+export const EXPECTED_SCHEMA_VERSION = 2;
 
 export class DatabaseUnavailableError extends Error {
   constructor() {
@@ -81,9 +82,9 @@ export function getSessionDurationSeconds(): number {
       .prepare("SELECT value FROM settings WHERE key = 'session_duration_seconds'")
       .get() as { value: string } | undefined;
     const parsed = Number.parseInt(row?.value ?? '', 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 30;
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_SESSION_SECONDS;
   } catch {
-    return 30;
+    return DEFAULT_SESSION_SECONDS;
   }
 }
 
