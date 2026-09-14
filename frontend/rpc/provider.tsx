@@ -11,23 +11,17 @@ import {
 } from 'react';
 import type { RpcInvocationData } from 'livekit-client';
 import { useRoomContext } from '@livekit/components-react';
-import {
-  type AvatarState,
-  type NotificationKind,
-  RPC_METHODS,
-  type RpcMethod,
-  parseRpcPayload,
-} from './schemas';
+import { type ConfirmationRequest, type PermissionKind, createRpcHandlers } from './handlers';
+import { type AvatarState, type NotificationKind, RPC_METHODS } from './schemas';
 
 /**
  * ثبت یک‌جای همه‌ی متدهای RPC روی اتاق.
  *
- * چرا یک نقطه؟ چون پراکنده کردن `registerRpcMethod` در کامپوننت‌ها یعنی
- * هیچ‌کس نمی‌داند ایجنت در مجموع چه کارهایی می‌تواند روی صفحه‌ی کاربر انجام
- * دهد — و همان لحظه‌ای که این را ندانیم، فهرست مجاز بی‌معنی می‌شود.
+ * چرا یک نقطه؟ چون پراکنده کردن `registerRpcMethod` در کامپوننت‌ها یعنی هیچ‌کس
+ * نمی‌داند ایجنت در مجموع چه کارهایی می‌تواند روی صفحه‌ی کاربر انجام دهد — و
+ * همان لحظه‌ای که این را ندانیم، فهرست مجاز بی‌معنی می‌شود.
  *
- * فقط متدهای `RPC_METHODS` ثبت می‌شوند. هر نام دیگری از سمت ایجنت، پیش از
- * رسیدن به اینجا با خطای SDK رد می‌شود.
+ * تصمیم‌گیری هندلرها در `handlers.ts` است؛ اینجا فقط سیم‌کشی React و اتاق.
  */
 
 export type Notification = {
@@ -36,18 +30,11 @@ export type Notification = {
   message: string;
 };
 
-type PendingConfirmation = {
-  id: string;
-  title: string;
-  message: string;
-  confirmLabel: string;
-  cancelLabel: string;
-  resolve: (confirmed: boolean) => void;
-};
+type PendingConfirmation = ConfirmationRequest & { resolve: (confirmed: boolean) => void };
 
 type PendingPermission = {
   id: string;
-  kind: 'camera' | 'screen_share';
+  kind: PermissionKind;
   reason?: string;
   resolve: (granted: boolean) => void;
 };
@@ -80,8 +67,8 @@ export function RpcProvider({ children }: { children: React.ReactNode }) {
   const [confirmation, setConfirmation] = useState<PendingConfirmation | null>(null);
   const [permission, setPermission] = useState<PendingPermission | null>(null);
 
-  // در callback های RPC به آخرین مقدار نیاز داریم بدون اینکه ثبت متدها با هر
-  // رندر دوباره انجام شود.
+  // هندلرهای RPC به آخرین مقدار نیاز دارند، بدون اینکه ثبت متدها با هر رندر
+  // دوباره انجام شود.
   const confirmationRef = useRef<PendingConfirmation | null>(null);
   const permissionRef = useRef<PendingPermission | null>(null);
   confirmationRef.current = confirmation;
@@ -108,108 +95,56 @@ export function RpcProvider({ children }: { children: React.ReactNode }) {
 
     const timers = new Set<number>();
 
-    const handlers: Record<RpcMethod, (data: RpcInvocationData) => Promise<string>> = {
-      show_notification: async (data) => {
-        const parsed = parseRpcPayload('show_notification', data.payload);
-        if (!parsed.ok) return JSON.stringify({ error: parsed.reason });
+    const handlers = createRpcHandlers({
+      setAvatarState,
 
-        const { action_id, kind, message } = parsed.data;
-        setNotifications((current) => [...current, { id: action_id, kind, message }]);
-
+      showNotification: (notification) => {
+        setNotifications((current) => [...current, notification]);
         const timer = window.setTimeout(() => {
-          dismissNotification(action_id);
+          dismissNotification(notification.id);
           timers.delete(timer);
         }, NOTIFICATION_TTL_MS);
         timers.add(timer);
-
-        return JSON.stringify({ ok: true, action_id });
       },
 
-      show_confirmation: async (data) => {
-        const parsed = parseRpcPayload('show_confirmation', data.payload);
-        if (!parsed.ok) return JSON.stringify({ error: parsed.reason });
-
-        const { action_id, title, message, confirm_label, cancel_label } = parsed.data;
-
+      askConfirmation: (request) => {
         // اگر تأییدخواهی قبلی باز مانده، بسته و «نه» شمرده می‌شود. دو دیالوگ
         // هم‌زمان یعنی کاربر نمی‌داند دارد به کدام پاسخ می‌دهد.
         confirmationRef.current?.resolve(false);
+        return new Promise<boolean>((resolve) => {
+          setConfirmation({ ...request, resolve });
+        });
+      },
 
-        const confirmed = await new Promise<boolean>((resolve) => {
-          setConfirmation({
-            id: action_id,
-            title,
-            message,
-            confirmLabel: confirm_label,
-            cancelLabel: cancel_label,
-            resolve,
-          });
+      /**
+       * درخواست دسترسی همیشه از کاربر پرسیده می‌شود.
+       *
+       * ایجنت حق ندارد دوربین یا اشتراک صفحه را خودش روشن کند؛ فقط می‌تواند
+       * بخواهد. روشن کردن واقعی پس از کلیک کاربر انجام می‌شود، چون مرورگر هم
+       * برای getUserMedia و getDisplayMedia یک تعامل کاربر لازم دارد.
+       */
+      askPermission: async (kind, id, reason) => {
+        permissionRef.current?.resolve(false);
+
+        const accepted = await new Promise<boolean>((resolve) => {
+          setPermission({ id, kind, reason, resolve });
         });
 
-        return JSON.stringify({ confirmed, action_id });
+        if (!accepted) return false;
+
+        try {
+          if (kind === 'camera') await room.localParticipant.setCameraEnabled(true);
+          else await room.localParticipant.setScreenShareEnabled(true);
+          return true;
+        } catch {
+          // کاربر در پنجره‌ی خود مرورگر رد کرده، یا دستگاهی وجود ندارد.
+          return false;
+        }
       },
-
-      set_avatar_state: async (data) => {
-        const parsed = parseRpcPayload('set_avatar_state', data.payload);
-        if (!parsed.ok) return JSON.stringify({ error: parsed.reason });
-
-        setAvatarState(parsed.data.state);
-        return JSON.stringify({ ok: true, action_id: parsed.data.action_id });
-      },
-
-      request_camera_permission: async (data) => {
-        const parsed = parseRpcPayload('request_camera_permission', data.payload);
-        if (!parsed.ok) return JSON.stringify({ error: parsed.reason });
-
-        const granted = await askPermission('camera', parsed.data.action_id, parsed.data.reason);
-        return JSON.stringify({ granted, action_id: parsed.data.action_id });
-      },
-
-      request_screen_share: async (data) => {
-        const parsed = parseRpcPayload('request_screen_share', data.payload);
-        if (!parsed.ok) return JSON.stringify({ error: parsed.reason });
-
-        const granted = await askPermission(
-          'screen_share',
-          parsed.data.action_id,
-          parsed.data.reason
-        );
-        return JSON.stringify({ granted, action_id: parsed.data.action_id });
-      },
-    };
-
-    /**
-     * درخواست دسترسی همیشه از کاربر پرسیده می‌شود.
-     *
-     * ایجنت حق ندارد دوربین یا اشتراک صفحه را خودش روشن کند؛ فقط می‌تواند
-     * بخواهد. روشن کردن واقعی پس از کلیک کاربر انجام می‌شود، چون مرورگر هم
-     * برای getUserMedia و getDisplayMedia یک تعامل کاربر لازم دارد.
-     */
-    async function askPermission(
-      kind: 'camera' | 'screen_share',
-      id: string,
-      reason?: string
-    ): Promise<boolean> {
-      permissionRef.current?.resolve(false);
-
-      const accepted = await new Promise<boolean>((resolve) => {
-        setPermission({ id, kind, reason, resolve });
-      });
-
-      if (!accepted || !room) return false;
-
-      try {
-        if (kind === 'camera') await room.localParticipant.setCameraEnabled(true);
-        else await room.localParticipant.setScreenShareEnabled(true);
-        return true;
-      } catch {
-        // کاربر در پنجره‌ی خود مرورگر رد کرده، یا دستگاهی وجود ندارد.
-        return false;
-      }
-    }
+    });
 
     for (const method of RPC_METHODS) {
-      room.registerRpcMethod(method, handlers[method]);
+      room.registerRpcMethod(method, (data: RpcInvocationData) => handlers[method](data.payload));
     }
 
     return () => {

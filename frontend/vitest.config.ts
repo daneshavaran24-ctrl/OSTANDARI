@@ -8,6 +8,6 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
-    coverage: { include: ['lib/**', 'hooks/**'] },
+    coverage: { include: ['lib/**', 'hooks/**', 'rpc/**'] },
   },
 });

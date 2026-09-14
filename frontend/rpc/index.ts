@@ -1,4 +1,5 @@
 export { RpcProvider, useRpc, type Notification } from './provider';
+export { createRpcHandlers, type RpcEffects, type RpcHandlers } from './handlers';
 export { RpcSurface } from './rpc-ui';
 export {
   AVATAR_STATES,
