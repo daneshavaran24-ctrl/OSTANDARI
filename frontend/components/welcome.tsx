@@ -9,6 +9,7 @@ interface WelcomeProps {
   startButtonText: string;
   requiresAccessCode?: boolean;
   errorMessage?: string | null;
+  timedOut?: boolean;
   onStartCall: (accessCode?: string) => void;
 }
 
@@ -17,6 +18,7 @@ export const Welcome = ({
   startButtonText,
   requiresAccessCode = false,
   errorMessage = null,
+  timedOut = false,
   onStartCall,
   ref,
 }: React.ComponentProps<'div'> & WelcomeProps) => {
@@ -41,6 +43,16 @@ export const Welcome = ({
       <p className="text-fg1 max-w-prose pt-1 leading-6 font-medium">
         گفت‌وگوی زنده با دستیار هوشمند پشتیبانی
       </p>
+
+      {timedOut && (
+        <p
+          role="status"
+          data-testid="session-timed-out"
+          className="border-separatorModerate bg-bgModerate text-fgModerate mt-4 max-w-prose rounded-md border px-4 py-2 text-sm"
+        >
+          وقت شما تمام شد. برای گفت‌وگوی دوباره، دکمه‌ی شروع را بزنید.
+        </p>
+      )}
 
       <form onSubmit={handleSubmit} className="mt-6 flex w-64 flex-col items-center gap-3">
         {requiresAccessCode && (

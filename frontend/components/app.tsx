@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Room, RoomEvent } from 'livekit-client';
 import { motion } from 'motion/react';
 import { RoomAudioRenderer, RoomContext, StartAudio } from '@livekit/components-react';
@@ -10,6 +10,7 @@ import { SessionView } from '@/components/session-view';
 import { Toaster } from '@/components/ui/sonner';
 import { Welcome } from '@/components/welcome';
 import useConnectionDetails, { ConnectionDetailsError } from '@/hooks/useConnectionDetails';
+import { useCountdown, useSessionDuration } from '@/hooks/useSessionCountdown';
 import type { AppConfig } from '@/lib/types';
 
 const MotionWelcome = motion.create(Welcome);
@@ -24,6 +25,8 @@ export function App({ appConfig }: AppProps) {
   const [sessionStarted, setSessionStarted] = useState(false);
   const [accessCode, setAccessCode] = useState<string | undefined>(undefined);
   const [startError, setStartError] = useState<string | null>(null);
+  const [timedOut, setTimedOut] = useState(false);
+  const sessionDuration = useSessionDuration();
   const { requiresAccessCode, refreshConnectionDetails, existingOrRefreshConnectionDetails } =
     useConnectionDetails();
 
@@ -86,6 +89,15 @@ export function App({ appConfig }: AppProps) {
     };
   }, [room, sessionStarted, accessCode, appConfig.isPreConnectBufferEnabled]);
 
+  const handleExpire = useCallback(() => {
+    // این فقط برای تجربه‌ی کاربری است. اجرای واقعی مهلت سمت ایجنت انجام
+    // می‌شود، چون هر کسی می‌تواند جاوااسکریپت مرورگر را دور بزند.
+    setTimedOut(true);
+    setSessionStarted(false);
+  }, []);
+
+  const remainingSeconds = useCountdown(sessionDuration, sessionStarted, handleExpire);
+
   const { startButtonText } = appConfig;
 
   return (
@@ -95,8 +107,10 @@ export function App({ appConfig }: AppProps) {
         startButtonText={startButtonText}
         requiresAccessCode={requiresAccessCode}
         errorMessage={startError}
+        timedOut={timedOut}
         onStartCall={(code) => {
           setStartError(null);
+          setTimedOut(false);
           setAccessCode(code);
           setSessionStarted(true);
         }}
@@ -115,6 +129,7 @@ export function App({ appConfig }: AppProps) {
           appConfig={appConfig}
           disabled={!sessionStarted}
           sessionStarted={sessionStarted}
+          remainingSeconds={remainingSeconds}
           initial={{ opacity: 0 }}
           animate={{ opacity: sessionStarted ? 1 : 0 }}
           transition={{

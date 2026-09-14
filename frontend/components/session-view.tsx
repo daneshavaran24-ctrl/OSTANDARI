@@ -15,6 +15,7 @@ import { ChatMessageView } from '@/components/livekit/chat/chat-message-view';
 import { MediaTiles } from '@/components/livekit/media-tiles';
 import useChatAndTranscription from '@/hooks/useChatAndTranscription';
 import { useDebugMode } from '@/hooks/useDebug';
+import { formatRemaining } from '@/hooks/useSessionCountdown';
 import type { AppConfig } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -26,12 +27,14 @@ interface SessionViewProps {
   appConfig: AppConfig;
   disabled: boolean;
   sessionStarted: boolean;
+  remainingSeconds?: number | null;
 }
 
 export const SessionView = ({
   appConfig,
   disabled,
   sessionStarted,
+  remainingSeconds = null,
   ref,
 }: React.ComponentProps<'div'> & SessionViewProps) => {
   const { state: agentState } = useVoiceAssistant();
@@ -112,6 +115,21 @@ export const SessionView = ({
           </AnimatePresence>
         </div>
       </ChatMessageView>
+
+      {remainingSeconds !== null && sessionStarted && (
+        <div
+          role="timer"
+          aria-live="off"
+          data-testid="session-countdown"
+          className={cn(
+            'fixed inset-x-0 top-4 z-50 mx-auto w-fit rounded-full px-4 py-1.5',
+            'font-mono text-sm tabular-nums transition-colors',
+            remainingSeconds <= 10 ? 'bg-bgSerious text-fgSerious' : 'bg-bg3 text-fg1'
+          )}
+        >
+          {formatRemaining(remainingSeconds)}
+        </div>
+      )}
 
       <div className="bg-background mp-12 fixed inset-x-0 top-0 h-32 md:h-36">
         {/* skrim */}
