@@ -8,7 +8,10 @@ import type { NextConfig } from 'next';
  *
  *   connect-src wss: https:  → اتصال WebRTC و سیگنالینگ به سرور LiveKit،
  *                              که نشانی‌اش از متغیر محیطی می‌آید و در زمان
- *                              بیلد معلوم نیست
+ *                              بیلد معلوم نیست. در حالت توسعه ws: و http: هم
+ *                              اضافه می‌شوند، وگرنه سرور LiveKit محلی — که
+ *                              رمزگذاری ندارد — اصلاً قابل اتصال نیست و
+ *                              مرورگر با «Refused to connect» ساکت می‌ماند.
  *   media-src blob:          → ترک‌های صوتی و تصویری دریافتی
  *   img-src blob: data:      → فریم‌های ویدیو و تصاویر درون‌خطی
  *   worker-src blob:         → وب‌ورکرهای پردازش صدا در livekit-client
@@ -27,7 +30,7 @@ const csp = [
   "img-src 'self' blob: data:",
   "media-src 'self' blob:",
   "worker-src 'self' blob:",
-  "connect-src 'self' wss: https:",
+  `connect-src 'self' wss: https:${isDev ? ' ws: http:' : ''}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
