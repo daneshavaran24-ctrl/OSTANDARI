@@ -241,6 +241,30 @@ jobs:
             test-results/
           retention-days: 7
 
+  image:
+    # ایمیج استقرار در هر PR ساخته می‌شود.
+    # دلیلش این نیست که ایمیج را جایی می‌فرستیم — نمی‌فرستیم. دلیلش این است
+    # که Dockerfile هیچ تست دیگری ندارد و خرابی‌اش فقط وسط استقرار معلوم
+    # می‌شود، یعنی بدترین لحظه‌ی ممکن.
+    name: ساخت ایمیج استقرار
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: docker build -t ostandari:ci .
+
+      # ایمیج باید بتواند بالا بیاید و با نبود دیسک، خطای روشن بدهد — نه
+      # اینکه بی‌صدا یک پایگاه داده‌ی موقت بسازد که با هر استقرار پاک می‌شود.
+      - name: Refuse to start without a writable disk
+        run: |
+          output=$(docker run --rm -e DATABASE_PATH=/mnt/missing/ostandari.db ostandari:ci 2>&1 || true)
+          echo "$output"
+          echo "$output" | grep -q "قابل نوشتن نیست" || {
+            echo "::error::کانتینر باید نبود دیسک را با پیام روشن گزارش کند"
+            exit 1
+          }
+
   security:
     name: امنیت (audit و اسکن کلید)
     runs-on: ubuntu-latest

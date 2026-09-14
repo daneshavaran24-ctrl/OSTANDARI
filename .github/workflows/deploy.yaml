@@ -1,0 +1,49 @@
+name: Deploy to Liara
+
+# اولین اجرا عمداً دستی است. استقرار خودکار با هر push تا وقتی روشن شود که
+# اپ، دیسک و متغیرها در پنل لیارا آماده‌اند، بیشتر ضرر دارد تا سود.
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: نام اپ در لیارا
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  # دو استقرار هم‌زمان روی یک اپ یعنی نتیجه‌ی غیرقابل‌پیش‌بینی
+  group: liara-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: استقرار
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # همان ایمیجی که مستقر می‌شود، اول اینجا ساخته می‌شود. اگر Dockerfile
+      # خراب باشد، اینجا معلوم می‌شود نه وسط استقرار.
+      - name: Build the image
+        run: docker build -t ostandari:ci .
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Deploy
+        env:
+          LIARA_TOKEN: ${{ secrets.LIARA_TOKEN }}
+        run: |
+          if [ -z "$LIARA_TOKEN" ]; then
+            echo "::error::LIARA_TOKEN تنظیم نشده است. آن را در Settings → Secrets → Actions بگذارید."
+            exit 1
+          fi
+          npx --yes @liara/cli@latest deploy \
+            --api-token "$LIARA_TOKEN" \
+            --app "${{ inputs.app }}" \
+            --platform docker \
+            --detach
