@@ -13,8 +13,9 @@ from livekit.agents import (
     cli,
     room_io,
 )
-from livekit.plugins import ai_coustics, bey, openai
+from livekit.plugins import bey, openai
 
+from audio import build_noise_cancellation
 from prompts import AGENT_INSTRUCTIONS, GREETING_INSTRUCTIONS
 from tools import send_email, unblock_user
 
@@ -55,9 +56,7 @@ async def ostandari_support(ctx: JobContext):
         room=ctx.room,
         room_options=room_io.RoomOptions(
             audio_input=room_io.AudioInputOptions(
-                noise_cancellation=ai_coustics.audio_enhancement(
-                    model=ai_coustics.EnhancerModel.QUAIL_VF_S
-                ),
+                noise_cancellation=build_noise_cancellation(),
             ),
             # ورودی تصویری لازم است تا ایجنت صفحه‌ی به‌اشتراک‌گذاشته‌شده را ببیند
             video_input=room_io.VideoInputOptions(),
