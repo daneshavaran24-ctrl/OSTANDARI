@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { AccessToken, type AccessTokenOptions, type VideoGrant } from 'livekit-server-sdk';
+import { RoomAgentDispatch, RoomConfiguration } from '@livekit/protocol';
 import { accessCodeMatches, accessCodeRequired } from '@/lib/access-code';
 import { checkRateLimit, clientKey } from '@/lib/rate-limit';
 
@@ -9,6 +10,14 @@ const API_SECRET = process.env.LIVEKIT_API_SECRET;
 const LIVEKIT_URL = process.env.LIVEKIT_URL;
 
 const DEFAULT_TOKEN_TTL = '15m';
+
+/**
+ * نام ایجنتی که باید به اتاق اعزام شود.
+ *
+ * باید با `@server.rtc_session(agent_name=...)` در `agent/src/agent.py` یکی
+ * باشد. متغیر محیطی برای استقرارهایی است که چند ایجنت دارند.
+ */
+const AGENT_NAME = process.env.AGENT_NAME?.trim() || 'ostandari-support';
 
 // نتیجه هرگز کش نشود
 export const revalidate = 0;
@@ -123,5 +132,16 @@ function createParticipantToken(userInfo: AccessTokenOptions, roomName: string) 
     canSubscribe: true,
   };
   at.addGrant(grant);
+
+  // ⚠️ ایجنت با `agent_name` ثبت می‌شود و در LiveKit این یعنی **اعزام صریح**:
+  // کار به‌صورت خودکار به هیچ اتاقی فرستاده نمی‌شود. بدون این بخش، مرورگر وصل
+  // می‌شود، اتاق ساخته می‌شود، و دستیار هرگز نمی‌آید — بدون هیچ خطایی.
+  //
+  // این نام باید با `@server.rtc_session(agent_name=...)` در agent/src/agent.py
+  // یکی بماند؛ `agent/tests/test_dispatch.py` همین را می‌سنجد.
+  at.roomConfig = new RoomConfiguration({
+    agents: [new RoomAgentDispatch({ agentName: AGENT_NAME })],
+  });
+
   return at.toJwt();
 }
