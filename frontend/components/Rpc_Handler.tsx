@@ -14,7 +14,13 @@ const NOTIFICATION_COLORS = {
   send_email: '#3b82f6',
 } as const;
 
-function parsePayload(raw: string): NotificationPayload | null {
+/**
+ * payload ورودی RPC را تجزیه و اعتبارسنجی می‌کند.
+ *
+ * export شده تا قابل تست باشد. این ورودی از شبکه می‌آید، پس هر شکل ناقص یا
+ * نوع ناشناخته باید null بدهد نه اینکه به رندر برسد.
+ */
+export function parsePayload(raw: string): NotificationPayload | null {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null) return null;

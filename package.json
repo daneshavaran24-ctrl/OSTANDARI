@@ -1,0 +1,26 @@
+{
+  "name": "ostandari",
+  "version": "1.0.0",
+  "description": "دستیار پشتیبانی فنی صوتی با آواتار تصویری. کاربر با دستیار حرف می‌زند، صفحه‌ی نمایشش را به اشتراک می‌گذارد، و دستیار مشکل را می‌بیند، راهنمایی می‌کند، در صورت لزوم مسدودیت حسابش را برمی‌دارد و خلاصه‌ی تیکت را برایش ایمیل می‌کند.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/daneshavaran24-ctrl/OSTANDARI.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/daneshavaran24-ctrl/OSTANDARI/issues"
+  },
+  "homepage": "https://github.com/daneshavaran24-ctrl/OSTANDARI#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
+}

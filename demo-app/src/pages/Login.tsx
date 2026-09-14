@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
+import { isBlocked } from "@/lib/blocked-users";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -16,14 +17,10 @@ const Login = () => {
 
   const checkBlockedUser = async (username: string): Promise<boolean> => {
     try {
-      const response = await fetch("/blockusers.txt");
-      const text = await response.text();
-      const blockedUsers = text.split("\n").map(u => u.trim().toLowerCase());
-      
-      // Extract just the username part after the last backslash
-      const usernamePart = username.split("\\").pop()?.toLowerCase() || "";
-      
-      return blockedUsers.includes(usernamePart);
+      // بدون کش، چون ایجنت پشتیبانی این فایل را حین گفت‌وگو روی دیسک عوض
+      // می‌کند و مرورگر نباید نسخه‌ی قدیمی را نگه دارد.
+      const response = await fetch("/blockusers.txt", { cache: "no-store" });
+      return isBlocked(username, await response.text());
     } catch (error) {
       console.error("Error checking blocked users:", error);
       return false;
