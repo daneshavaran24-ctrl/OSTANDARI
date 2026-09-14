@@ -87,3 +87,9 @@ test-results/
 playwright-report/
 blob-report/
 .playwright/
+
+# ---------- پایگاه داده ----------
+data/
+*.db
+*.db-wal
+*.db-shm

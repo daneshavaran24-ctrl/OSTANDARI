@@ -13,6 +13,7 @@ dependencies = [
     "livekit-agents[bey,openai]~=1.8.1",
     "livekit-plugins-ai-coustics~=0.2",
     "livekit-plugins-noise-cancellation~=0.3.0",
+    "cryptography>=43",
     "python-dotenv>=1.2.1",
 ]
 
