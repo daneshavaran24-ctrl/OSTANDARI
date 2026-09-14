@@ -22,8 +22,7 @@ export function encryptionKey(): Buffer {
   const raw = process.env.ENCRYPTION_KEY?.trim();
   if (!raw) {
     throw new EncryptionKeyError(
-      'ENCRYPTION_KEY تنظیم نشده است. با این دستور یکی بسازید: ' +
-        'openssl rand -base64 32'
+      'ENCRYPTION_KEY تنظیم نشده است. با این دستور یکی بسازید: openssl rand -base64 32'
     );
   }
 
