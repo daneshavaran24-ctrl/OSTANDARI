@@ -1,4 +1,14 @@
 import type { NextConfig } from 'next';
+import { fileURLToPath } from 'node:url';
+
+/**
+ * ریشه‌ی این پروژه.
+ *
+ * بدون این، Next ریشه‌ی مخزن را حدس می‌زند (چون چند lockfile کنار هم هست) و
+ * خروجی standalone تودرتو می‌شود و حتی پوشه‌ی `data/` را هم با خودش می‌برد —
+ * یعنی پایگاه داده‌ی محلی وارد ایمیج داکر می‌شود.
+ */
+const projectRoot = fileURLToPath(new URL('.', import.meta.url));
 
 /**
  * سیاست امنیت محتوا.
@@ -54,6 +64,11 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // خروجی standalone: Next فقط وابستگی‌هایی را که واقعاً در رانتایم لازم‌اند
+  // کنار سرور می‌گذارد. بدون این، ایمیج داکر باید کل node_modules را ببرد.
+  output: 'standalone',
+  outputFileTracingRoot: projectRoot,
+  turbopack: { root: projectRoot },
   poweredByHeader: false,
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];

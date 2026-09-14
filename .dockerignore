@@ -1,0 +1,28 @@
+# هر چیزی که نباید وارد context بیلد شود. کوچک نگه داشتن context هم بیلد را
+# سریع‌تر می‌کند و هم جلوی رفتن تصادفی راز و داده‌ی محلی به ایمیج را می‌گیرد.
+
+**/node_modules
+**/.next
+**/dist
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+
+# 🔴 پایگاه داده‌ی محلی و کلیدها هرگز نباید در ایمیج باشند
+data/
+**/.env
+**/.env.*
+!**/.env.example
+
+.git
+.github
+test-results/
+playwright-report/
+e2e/
+demo-app/
+docs/
+agent/tests/
+frontend/tests/
+*.md
