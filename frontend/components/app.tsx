@@ -9,7 +9,7 @@ import { toastAlert } from '@/components/alert-toast';
 import { SessionView } from '@/components/session-view';
 import { Toaster } from '@/components/ui/sonner';
 import { Welcome } from '@/components/welcome';
-import useConnectionDetails from '@/hooks/useConnectionDetails';
+import useConnectionDetails, { ConnectionDetailsError } from '@/hooks/useConnectionDetails';
 import type { AppConfig } from '@/lib/types';
 
 const MotionWelcome = motion.create(Welcome);
@@ -22,12 +22,15 @@ interface AppProps {
 export function App({ appConfig }: AppProps) {
   const room = useMemo(() => new Room(), []);
   const [sessionStarted, setSessionStarted] = useState(false);
-  const { refreshConnectionDetails, existingOrRefreshConnectionDetails } = useConnectionDetails();
+  const [accessCode, setAccessCode] = useState<string | undefined>(undefined);
+  const [startError, setStartError] = useState<string | null>(null);
+  const { requiresAccessCode, refreshConnectionDetails, existingOrRefreshConnectionDetails } =
+    useConnectionDetails();
 
   useEffect(() => {
     const onDisconnected = () => {
       setSessionStarted(false);
-      refreshConnectionDetails();
+      refreshConnectionDetails(accessCode).catch(() => {});
     };
     const onMediaDevicesError = (error: Error) => {
       toastAlert({
@@ -41,7 +44,7 @@ export function App({ appConfig }: AppProps) {
       room.off(RoomEvent.Disconnected, onDisconnected);
       room.off(RoomEvent.MediaDevicesError, onMediaDevicesError);
     };
-  }, [room, refreshConnectionDetails]);
+  }, [room, refreshConnectionDetails, accessCode]);
 
   useEffect(() => {
     let aborted = false;
@@ -50,7 +53,7 @@ export function App({ appConfig }: AppProps) {
         room.localParticipant.setMicrophoneEnabled(true, undefined, {
           preConnectBuffer: appConfig.isPreConnectBufferEnabled,
         }),
-        existingOrRefreshConnectionDetails().then((connectionDetails) =>
+        existingOrRefreshConnectionDetails(accessCode).then((connectionDetails) =>
           room.connect(connectionDetails.serverUrl, connectionDetails.participantToken)
         ),
       ]).catch((error) => {
@@ -60,6 +63,14 @@ export function App({ appConfig }: AppProps) {
           // These errors are likely caused by this effect rerunning rapidly,
           // resulting in a previous run `disconnect` running in parallel with
           // a current run `connect`
+          return;
+        }
+
+        // خطای کد دسترسی و محدودیت نرخ زیر خود فیلد نشان داده می‌شود،
+        // نه به‌صورت یک توست عمومی که کاربر ربطش را نمی‌فهمد.
+        if (error instanceof ConnectionDetailsError) {
+          setStartError(error.message);
+          setSessionStarted(false);
           return;
         }
 
@@ -73,7 +84,7 @@ export function App({ appConfig }: AppProps) {
       aborted = true;
       room.disconnect();
     };
-  }, [room, sessionStarted, appConfig.isPreConnectBufferEnabled]);
+  }, [room, sessionStarted, accessCode, appConfig.isPreConnectBufferEnabled]);
 
   const { startButtonText } = appConfig;
 
@@ -82,7 +93,13 @@ export function App({ appConfig }: AppProps) {
       <MotionWelcome
         key="welcome"
         startButtonText={startButtonText}
-        onStartCall={() => setSessionStarted(true)}
+        requiresAccessCode={requiresAccessCode}
+        errorMessage={startError}
+        onStartCall={(code) => {
+          setStartError(null);
+          setAccessCode(code);
+          setSessionStarted(true);
+        }}
         disabled={sessionStarted}
         initial={{ opacity: 0 }}
         animate={{ opacity: sessionStarted ? 0 : 1 }}

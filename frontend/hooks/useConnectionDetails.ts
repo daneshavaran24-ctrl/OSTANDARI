@@ -4,70 +4,103 @@ import { ConnectionDetails } from '@/app/api/connection-details/route';
 
 const ONE_MINUTE_IN_MILLISECONDS = 60 * 1000;
 
+const ENDPOINT = process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ?? '/api/connection-details';
+
+/** خطایی که پیامش برای نمایش به کاربر مناسب است. */
+export class ConnectionDetailsError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ConnectionDetailsError';
+    this.status = status;
+  }
+}
+
+/**
+ * آیا توکن منقضی شده است؟
+ *
+ * `exp` در JWT برحسب ثانیه است و باید به میلی‌ثانیه تبدیل شود. یک دقیقه زودتر
+ * منقضی در نظر گرفته می‌شود تا توکن وسط اتصال باطل نشود.
+ *
+ * جدا از هوک export شده تا قابل تست باشد — این محاسبه قبلاً غلط بود و باعث
+ * می‌شد اتصال بعد از ۱۵ دقیقه بی‌صدا بمیرد.
+ */
+export function isTokenExpired(token: string | undefined, now: number = Date.now()): boolean {
+  if (!token) return true;
+
+  let exp: number | undefined;
+  try {
+    exp = decodeJwt(token).exp;
+  } catch {
+    return true;
+  }
+  if (!exp) return true;
+
+  return exp * 1000 - ONE_MINUTE_IN_MILLISECONDS <= now;
+}
+
 export default function useConnectionDetails() {
-  // Generate room connection details, including:
-  //   - A random Room name
-  //   - A random Participant name
-  //   - An Access Token to permit the participant to join the room
-  //   - The URL of the LiveKit server to connect to
-  //
-  // In real-world application, you would likely allow the user to specify their
-  // own participant name, and possibly to choose from existing rooms to join.
-
   const [connectionDetails, setConnectionDetails] = useState<ConnectionDetails | null>(null);
+  const [requiresAccessCode, setRequiresAccessCode] = useState(false);
 
-  const fetchConnectionDetails = useCallback(async () => {
+  // فقط می‌پرسیم که آیا کد لازم است یا نه؛ خود کد هرگز به کلاینت نمی‌آید.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(ENDPOINT, { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : { requiresAccessCode: false }))
+      .then((data) => {
+        if (!cancelled) setRequiresAccessCode(Boolean(data?.requiresAccessCode));
+      })
+      .catch(() => {
+        // اگر این درخواست شکست بخورد، فیلد کد نشان داده نمی‌شود؛ سرور در هر
+        // حال درخواست بدون کد را رد می‌کند و پیام خطا به کاربر می‌رسد.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const fetchConnectionDetails = useCallback(async (accessCode?: string) => {
     setConnectionDetails(null);
-    const url = new URL(
-      process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ?? '/api/connection-details',
-      window.location.origin
-    );
 
-    let data: ConnectionDetails;
-    try {
-      const res = await fetch(url.toString());
-      data = await res.json();
-    } catch (error) {
-      console.error('Error fetching connection details:', error);
-      throw new Error('Error fetching connection details!');
+    const res = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+      body: JSON.stringify(accessCode ? { accessCode } : {}),
+    }).catch(() => {
+      throw new ConnectionDetailsError('اتصال به سرور برقرار نشد.', 0);
+    });
+
+    if (!res.ok) {
+      const message =
+        res.status === 401
+          ? 'کد دسترسی نادرست است.'
+          : res.status === 429
+            ? 'درخواست‌های بیش از حد. کمی بعد دوباره تلاش کنید.'
+            : 'دریافت اطلاعات اتصال ناموفق بود.';
+      throw new ConnectionDetailsError(message, res.status);
     }
 
+    const data: ConnectionDetails = await res.json();
     setConnectionDetails(data);
     return data;
   }, []);
 
-  useEffect(() => {
-    fetchConnectionDetails();
-  }, [fetchConnectionDetails]);
-
-  const isConnectionDetailsExpired = useCallback(() => {
-    const token = connectionDetails?.participantToken;
-    if (!token) {
-      return true;
-    }
-
-    const jwtPayload = decodeJwt(token);
-    if (!jwtPayload.exp) {
-      return true;
-    }
-    // `exp` در JWT برحسب ثانیه است و باید به میلی‌ثانیه تبدیل شود.
-    // یک دقیقه زودتر منقضی در نظر می‌گیریم تا توکن وسط اتصال باطل نشود.
-    const expiresAt = new Date(jwtPayload.exp * 1000 - ONE_MINUTE_IN_MILLISECONDS);
-
-    const now = new Date();
-    return expiresAt <= now;
-  }, [connectionDetails?.participantToken]);
-
-  const existingOrRefreshConnectionDetails = useCallback(async () => {
-    if (isConnectionDetailsExpired() || !connectionDetails) {
-      return fetchConnectionDetails();
-    } else {
+  const existingOrRefreshConnectionDetails = useCallback(
+    async (accessCode?: string) => {
+      if (!connectionDetails || isTokenExpired(connectionDetails.participantToken)) {
+        return fetchConnectionDetails(accessCode);
+      }
       return connectionDetails;
-    }
-  }, [connectionDetails, fetchConnectionDetails, isConnectionDetailsExpired]);
+    },
+    [connectionDetails, fetchConnectionDetails]
+  );
 
   return {
     connectionDetails,
+    requiresAccessCode,
     refreshConnectionDetails: fetchConnectionDetails,
     existingOrRefreshConnectionDetails,
   };
