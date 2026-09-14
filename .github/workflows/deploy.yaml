@@ -26,7 +26,12 @@ jobs:
 
       # همان ایمیجی که مستقر می‌شود، اول اینجا ساخته می‌شود. اگر Dockerfile
       # خراب باشد، اینجا معلوم می‌شود نه وسط استقرار.
-      - name: Build the image
+      #
+      # DOCKER_BUILDKIT=0 چون لیارا هم بیلدر کلاسیک دارد. با BuildKit این
+      # گام سبز می‌شود و استقرار بعدش می‌شکند — که بی‌فایده‌ترین حالت است.
+      - name: Build the image with the classic builder
+        env:
+          DOCKER_BUILDKIT: 0
         run: docker build -t ostandari:ci .
 
       - name: Use Node.js 22

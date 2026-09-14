@@ -251,7 +251,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build
+      # ⚠️ DOCKER_BUILDKIT=0 عمدی است: لیارا با بیلدر کلاسیک می‌سازد. اگر
+      # اینجا با BuildKit بسازیم، ویژگی‌هایی که آنجا پشتیبانی نمی‌شوند از
+      # چشم CI پنهان می‌مانند — دقیقاً همان چیزی که یک بار اتفاق افتاد و
+      # استقرار را در گام ۹ شکست.
+      - name: Build with the classic builder, like Liara
+        env:
+          DOCKER_BUILDKIT: 0
         run: docker build -t ostandari:ci .
 
       # ایمیج باید بتواند بالا بیاید و با نبود دیسک، خطای روشن بدهد — نه
