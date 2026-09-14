@@ -1,5 +1,3 @@
-import asyncio
-import json
 import logging
 import os
 import smtplib
@@ -7,9 +5,9 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
 
-from livekit import rtc
 from livekit.agents import RunContext, ToolError, function_tool, get_job_context
 
+import rpc
 from guards import (
     GuardError,
     allowed_email_domains,
@@ -39,45 +37,6 @@ def _session_id() -> str:
         return get_job_context().room.name
     except Exception:  # بیرون از یک job واقعی (تست، یا قبل از اتصال)
         return "unknown-session"
-
-
-def _human_participant_identity() -> str:
-    """
-    هویتِ کاربر انسانی داخل اتاق را برمی‌گرداند.
-
-    آواتار Beyond Presence هم خودش یک participant مستقل است و با
-    `.with_kind("agent")` وارد اتاق می‌شود، پس نمی‌توان صرفاً اولین عضو
-    remote_participants را برداشت — بسته به ترتیب ورود ممکن است آواتار باشد.
-
-    مقایسه با enum عددی protobuf انجام می‌شود، نه با نام رشته‌ای: مقدار
-    `participant.kind` یک int است (PARTICIPANT_KIND_AGENT برابر ۴) و
-    str() گرفتن از آن «4» می‌دهد، نه چیزی که به AGENT ختم شود.
-    """
-    room = get_job_context().room
-    for identity, participant in room.remote_participants.items():
-        if participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_AGENT:
-            continue
-        return identity
-    raise ToolError("هیچ کاربری در اتاق حضور ندارد تا اعلان برایش ارسال شود.")
-
-
-async def _notify_client(payload: dict[str, str]) -> str:
-    """
-    اعلان بصری را روی کلاینت نمایش می‌دهد.
-
-    سه ثانیه مکث می‌کند تا اعلان هم‌زمان با پایان جمله‌ی ایجنت دیده شود،
-    نه قبل از آن.
-    """
-    identity = _human_participant_identity()
-    room = get_job_context().room
-
-    await asyncio.sleep(3)
-    return await room.local_participant.perform_rpc(
-        destination_identity=identity,
-        method="client.showNotification",
-        payload=json.dumps(payload),
-        response_timeout=30.0,
-    )
 
 
 @function_tool()
@@ -123,17 +82,12 @@ async def unblock_user(context: RunContext[None], username: str) -> str:
             "در حال حاضر امکان استفاده از ابزار unblock_user وجود ندارد."
         ) from e
 
-    try:
-        response = await _notify_client({"type": "unblock_user", "username": target})
-        logger.info("پاسخ اعلان unblock_user: %s", response)
+    # اعلان یک کار جانبی است: مسدودیت واقعاً برداشته شده، پس شکست نمایش اعلان
+    # نباید به مدل گزارش شود که کار انجام نشده.
+    shown = await rpc.notify(f"مسدودیت کاربر {target} برداشته شد.")
+    if shown:
         return f"مسدودیت کاربر {target} برداشته شد و اعلان روی صفحه نمایش داده شد."
-    except Exception as rpc_error:
-        # مسدودیت واقعاً برداشته شده؛ فقط اعلان بصری نرسیده است.
-        logger.error("خطای RPC هنگام ارسال اعلان unblock_user: %s", rpc_error)
-        return (
-            f"مسدودیت کاربر {target} برداشته شد، ولی نمایش اعلان روی صفحه "
-            f"ناموفق بود: {rpc_error}"
-        )
+    return f"مسدودیت کاربر {target} برداشته شد، ولی نمایش اعلان روی صفحه ناموفق بود."
 
 
 @function_tool()
@@ -212,13 +166,7 @@ async def send_email(
         logger.error("خطا هنگام ارسال ایمیل: %s", e)
         return f"هنگام ارسال ایمیل خطایی رخ داد: {e}"
 
-    try:
-        response = await _notify_client(
-            {"type": "send_email", "email_address": to_email}
-        )
-        logger.info("پاسخ اعلان send_email: %s", response)
+    shown = await rpc.notify(f"ایمیل با موفقیت به {to_email} ارسال شد.")
+    if shown:
         return f"ایمیل به {to_email} ارسال شد و اعلان روی صفحه نمایش داده شد."
-    except Exception as rpc_error:
-        # ایمیل واقعاً ارسال شده؛ فقط اعلان بصری نرسیده است.
-        logger.error("خطای RPC هنگام ارسال اعلان send_email: %s", rpc_error)
-        return f"ایمیل به {to_email} ارسال شد، ولی نمایش اعلان روی صفحه ناموفق بود: {rpc_error}"
+    return f"ایمیل به {to_email} ارسال شد، ولی نمایش اعلان روی صفحه ناموفق بود."

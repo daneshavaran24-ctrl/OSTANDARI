@@ -70,3 +70,30 @@ CREATE TABLE IF NOT EXISTS messages (
 
 CREATE INDEX IF NOT EXISTS idx_messages_conversation
   ON messages (conversation_id, id);
+
+-- ---------------------------------------------------------------------------
+-- نسخه‌ی ۲ — رخدادهای RPC
+-- ---------------------------------------------------------------------------
+
+-- هر فراخوانی RPC از ایجنت به مرورگر. برای عیب‌یابی و برای دیدن اینکه کدام
+-- Action روی دستگاه کاربر واقعاً اجرا شده است.
+--
+-- conversation_id می‌تواند NULL باشد: اگر ثبت رونوشت خاموش باشد ردیف گفت‌وگو
+-- ساخته نمی‌شود، ولی رخداد RPC همچنان ارزش عیب‌یابی دارد.
+CREATE TABLE IF NOT EXISTS rpc_events (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  conversation_id INTEGER REFERENCES conversations (id) ON DELETE CASCADE,
+  action_id       TEXT NOT NULL,
+  method          TEXT NOT NULL,
+  direction       TEXT NOT NULL DEFAULT 'agent_to_client',
+  status          TEXT NOT NULL,
+  duration_ms     INTEGER,
+  error           TEXT,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_rpc_events_conversation
+  ON rpc_events (conversation_id, id);
+
+CREATE INDEX IF NOT EXISTS idx_rpc_events_created
+  ON rpc_events (created_at DESC);

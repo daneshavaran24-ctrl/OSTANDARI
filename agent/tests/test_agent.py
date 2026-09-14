@@ -15,8 +15,9 @@ import pytest
 from livekit import rtc
 
 import guards
+import rpc
 import tools
-from tools import ToolError
+from rpc import RpcError
 
 
 class FakeParticipant:
@@ -43,16 +44,14 @@ def room(monkeypatch):
     """
     اتاق جعلی به ایجنت تزریق می‌کند.
 
-    نکته: `tools` تابع `get_job_context` را با `from ... import` گرفته، پس باید
-    خودِ نام داخل ماژول `tools` پچ شود، نه `livekit.agents`.
+    نکته: هر دو ماژول `get_job_context` را با `from ... import` گرفته‌اند، پس
+    باید خودِ نام داخل همان ماژول‌ها پچ شود، نه `livekit.agents`.
     """
 
     def _set(participants: dict) -> None:
-        monkeypatch.setattr(
-            tools,
-            "get_job_context",
-            lambda: types.SimpleNamespace(room=FakeRoom(participants)),
-        )
+        context = lambda: types.SimpleNamespace(room=FakeRoom(participants))  # noqa: E731
+        monkeypatch.setattr(tools, "get_job_context", context)
+        monkeypatch.setattr(rpc, "get_job_context", context)
 
     return _set
 
@@ -96,7 +95,7 @@ def test_block_file_can_be_overridden(monkeypatch, tmp_path):
 
 def test_picks_human_when_human_joined_first(room):
     room({"voice_assistant_user_42": HUMAN, "bey-avatar-abc": AVATAR})
-    assert tools._human_participant_identity() == "voice_assistant_user_42"
+    assert rpc.human_participant_identity() == "voice_assistant_user_42"
 
 
 def test_picks_human_when_avatar_joined_first(room):
@@ -107,7 +106,7 @@ def test_picks_human_when_avatar_joined_first(room):
     به آواتار می‌فرستاد نه به کاربر.
     """
     room({"bey-avatar-abc": AVATAR, "voice_assistant_user_42": HUMAN})
-    assert tools._human_participant_identity() == "voice_assistant_user_42"
+    assert rpc.human_participant_identity() == "voice_assistant_user_42"
 
 
 def test_avatar_kind_is_not_detectable_as_a_string(room):
@@ -120,20 +119,20 @@ def test_avatar_kind_is_not_detectable_as_a_string(room):
     """
     assert str(AVATAR.kind).upper().endswith("AGENT") is False
     room({"bey-avatar-abc": AVATAR, "voice_assistant_user_42": HUMAN})
-    assert tools._human_participant_identity() == "voice_assistant_user_42"
+    assert rpc.human_participant_identity() == "voice_assistant_user_42"
 
 
-def test_raises_tool_error_when_only_avatar_present(room):
+def test_raises_rpc_error_when_only_avatar_present(room):
     room({"bey-avatar-abc": AVATAR})
-    with pytest.raises(ToolError):
-        tools._human_participant_identity()
+    with pytest.raises(RpcError):
+        rpc.human_participant_identity()
 
 
-def test_raises_tool_error_on_empty_room(room):
-    """اتاق خالی باید ToolError بدهد، نه StopIteration."""
+def test_raises_rpc_error_on_empty_room(room):
+    """اتاق خالی باید RpcError بدهد، نه StopIteration."""
     room({})
-    with pytest.raises(ToolError):
-        tools._human_participant_identity()
+    with pytest.raises(RpcError):
+        rpc.human_participant_identity()
 
 
 # --------------------------------------------------------------------------
@@ -154,19 +153,22 @@ async def test_unblock_user_clears_file_then_notifies(monkeypatch, tmp_path, roo
     block_file.write_text("maxman123\n", encoding="utf-8")
     monkeypatch.setenv("BLOCK_USERS_FILE", str(block_file))
 
-    sent = {}
+    sent = []
 
-    async def fake_notify(payload):
-        sent.update(payload)
-        return "Notification shown"
+    async def fake_notify(message, kind="success", **kwargs):
+        sent.append((message, kind))
+        return True
 
-    monkeypatch.setattr(tools, "_notify_client", fake_notify)
+    monkeypatch.setattr(rpc, "notify", fake_notify)
     room({"voice_assistant_user_42": HUMAN})
 
     result = await tools.unblock_user(context=None, username="maxman123")
 
     assert block_file.read_text() == "", "فایل مسدودی پاک نشد"
-    assert sent == {"type": "unblock_user", "username": "maxman123"}
+    assert len(sent) == 1
+    message, kind = sent[0]
+    assert "maxman123" in message
+    assert kind == "success"
     assert "maxman123" in result
 
 
@@ -182,10 +184,10 @@ async def test_unblock_user_removes_only_the_named_user(monkeypatch, tmp_path, r
     block_file.write_text("alice\nmaxman123\nbob\n", encoding="utf-8")
     monkeypatch.setenv("BLOCK_USERS_FILE", str(block_file))
 
-    async def fake_notify(payload):
-        return "ok"
+    async def fake_notify(message, kind="success", **kwargs):
+        return True
 
-    monkeypatch.setattr(tools, "_notify_client", fake_notify)
+    monkeypatch.setattr(rpc, "notify", fake_notify)
     room({"voice_assistant_user_42": HUMAN})
 
     await tools.unblock_user(context=None, username="\\vienna\\maxman123")
@@ -267,10 +269,10 @@ async def test_unblock_user_still_succeeds_when_notification_fails(
     block_file.write_text("maxman123\n", encoding="utf-8")
     monkeypatch.setenv("BLOCK_USERS_FILE", str(block_file))
 
-    async def boom(payload):
-        raise RuntimeError("rpc timeout")
+    async def failed_notify(message, kind="success", **kwargs):
+        return False
 
-    monkeypatch.setattr(tools, "_notify_client", boom)
+    monkeypatch.setattr(rpc, "notify", failed_notify)
 
     result = await tools.unblock_user(context=None, username="maxman123")
 

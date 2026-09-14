@@ -25,7 +25,7 @@ logger = logging.getLogger("agent")
 
 # نسخه‌ای که این کد انتظارش را دارد. اگر دیتابیس جلوتر باشد یعنی پنل ارتقا
 # یافته ولی ایجنت نه — به‌جای خرابی خاموش، هشدار روشن می‌دهیم.
-EXPECTED_SCHEMA_VERSION = 1
+EXPECTED_SCHEMA_VERSION = 2
 
 DEFAULT_DB_PATH = Path(__file__).parents[2] / "data" / "ostandari.db"
 
@@ -294,3 +294,44 @@ def purge_old_conversations() -> int:
     if removed:
         logger.info("%d گفت‌وگوی قدیمی‌تر از %d روز پاک شد", removed, days)
     return removed
+
+
+# ---------------------------------------------------------------------------
+# رخدادهای RPC
+# ---------------------------------------------------------------------------
+
+
+def record_rpc_event(
+    conversation_id: int | None,
+    action_id: str,
+    method: str,
+    status: str,
+    duration_ms: int | None,
+    error: str | None,
+) -> None:
+    """
+    یک فراخوانی RPC را ثبت می‌کند.
+
+    مثل بقیه‌ی این ماژول، شکست ثبت هرگز نباید گفت‌وگو را بشکند: اگر پایگاه داده
+    نباشد یا قفل باشد، فقط هشدار لاگ می‌شود. متن خطا تا ۵۰۰ کاراکتر بریده
+    می‌شود تا یک استثنای طولانی جدول را پر نکند.
+    """
+    try:
+        with _connect() as conn:
+            if conn is None:
+                return
+            conn.execute(
+                "INSERT INTO rpc_events "
+                "(conversation_id, action_id, method, status, duration_ms, error) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    conversation_id,
+                    action_id,
+                    method,
+                    status,
+                    duration_ms,
+                    error[:500] if error else None,
+                ),
+            )
+    except sqlite3.Error as e:
+        logger.warning("ثبت رخداد RPC ناموفق بود: %s", e)

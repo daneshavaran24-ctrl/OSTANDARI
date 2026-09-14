@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Room, RoomEvent } from 'livekit-client';
 import { motion } from 'motion/react';
 import { RoomAudioRenderer, RoomContext, StartAudio } from '@livekit/components-react';
-import { RpcHandlers } from '@/components/Rpc_Handler';
 import { toastAlert } from '@/components/alert-toast';
 import { SessionView } from '@/components/session-view';
 import { Toaster } from '@/components/ui/sonner';
@@ -12,6 +11,7 @@ import { Welcome } from '@/components/welcome';
 import useConnectionDetails, { ConnectionDetailsError } from '@/hooks/useConnectionDetails';
 import { useCountdown, useSessionDuration } from '@/hooks/useSessionCountdown';
 import type { AppConfig } from '@/lib/types';
+import { RpcProvider, RpcSurface } from '@/rpc';
 
 const MotionWelcome = motion.create(Welcome);
 const MotionSessionView = motion.create(SessionView);
@@ -121,24 +121,26 @@ export function App({ appConfig }: AppProps) {
       />
 
       <RoomContext.Provider value={room}>
-        <RoomAudioRenderer />
-        <StartAudio label="Start Audio" />
-        {/* --- */}
-        <MotionSessionView
-          key="session-view"
-          appConfig={appConfig}
-          disabled={!sessionStarted}
-          sessionStarted={sessionStarted}
-          remainingSeconds={remainingSeconds}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: sessionStarted ? 1 : 0 }}
-          transition={{
-            duration: 0.5,
-            ease: 'linear',
-            delay: sessionStarted ? 0.5 : 0,
-          }}
-        />
-        <RpcHandlers />
+        <RpcProvider>
+          <RoomAudioRenderer />
+          <StartAudio label="Start Audio" />
+          {/* --- */}
+          <MotionSessionView
+            key="session-view"
+            appConfig={appConfig}
+            disabled={!sessionStarted}
+            sessionStarted={sessionStarted}
+            remainingSeconds={remainingSeconds}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: sessionStarted ? 1 : 0 }}
+            transition={{
+              duration: 0.5,
+              ease: 'linear',
+              delay: sessionStarted ? 0.5 : 0,
+            }}
+          />
+          <RpcSurface />
+        </RpcProvider>
       </RoomContext.Provider>
 
       <Toaster />
