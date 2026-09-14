@@ -110,8 +110,11 @@ jobs:
       - name: Pytest
         run: uv run pytest -q
 
-  e2e:
-    name: تست سرتاسری (Playwright)
+  interop:
+    # رمزنگاری کلیدها بین دو زبان انجام می‌شود: پنل ادمین (Node) رمز می‌کند و
+    # ایجنت (پایتون) رمزگشایی. اگر قالب دو طرف از هم دور بیفتد، هیچ تستِ
+    # تک‌زبانه‌ای آن را نمی‌گیرد و خرابی فقط سر اجرای واقعی معلوم می‌شود.
+    name: سازگاری رمزنگاری دو زبان
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -120,9 +123,54 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: agent/uv.lock
+
+      - name: Install agent dependencies
+        working-directory: agent
+        run: uv sync --locked
+
+      - name: Node ⇄ Python round trip
+        run: bash scripts/check-crypto-interop.sh
+
+  migration:
+    name: مهاجرت پایگاه داده
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # اجرای دوباره نباید خطا بدهد؛ روی سرور واقعی هر استقرار همین را صدا می‌زند.
+      - name: Create the schema, twice
+        run: |
+          node db/migrate.mjs
+          node db/migrate.mjs
+
+  e2e:
+    name: تست سرتاسری (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Install demo app dependencies
         working-directory: demo-app
         run: npm ci --legacy-peer-deps
+
+      # تست‌های پنل ادمین، فرانت‌اند را با بیلد پروداکشن بالا می‌آورند.
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
 
       - name: Install Playwright
         run: npm ci --legacy-peer-deps || npm install --legacy-peer-deps

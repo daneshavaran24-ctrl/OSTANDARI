@@ -13,13 +13,17 @@ SAMPLE='sk-proj-نمونه-۱۲۳-AbCdEf'
 
 fail() { echo "✗ $1" >&2; exit 1; }
 
+# فایل موقت نباید بعد از خطا در درخت کار جا بماند.
+TEMP_TS="$ROOT/frontend/.crypto-interop.ts"
+trap 'rm -f "$TEMP_TS"' EXIT
+
 # --- جهت ۱: Node رمز می‌کند، پایتون می‌خواند ---
-cat > "$ROOT/frontend/.crypto-interop.ts" <<'TS'
+cat > "$TEMP_TS" <<'TS'
 import { encryptSecret } from './lib/crypto';
 process.stdout.write(encryptSecret(process.env.SAMPLE!));
 TS
 BLOB="$(cd "$ROOT/frontend" && ENCRYPTION_KEY="$KEY" SAMPLE="$SAMPLE" npx --yes tsx .crypto-interop.ts)"
-rm -f "$ROOT/frontend/.crypto-interop.ts"
+rm -f "$TEMP_TS"
 
 OUT="$(cd "$ROOT/agent" && ENCRYPTION_KEY="$KEY" BLOB="$BLOB" uv run python -c '
 import os, sys, crypto
@@ -34,12 +38,12 @@ import os, sys, crypto
 sys.stdout.write(crypto.encrypt_secret(os.environ["SAMPLE"]))
 ')"
 
-cat > "$ROOT/frontend/.crypto-interop.ts" <<'TS'
+cat > "$TEMP_TS" <<'TS'
 import { decryptSecret } from './lib/crypto';
 process.stdout.write(decryptSecret(process.env.BLOB!));
 TS
 OUT="$(cd "$ROOT/frontend" && ENCRYPTION_KEY="$KEY" BLOB="$BLOB" npx --yes tsx .crypto-interop.ts)"
-rm -f "$ROOT/frontend/.crypto-interop.ts"
+rm -f "$TEMP_TS"
 
 [ "$OUT" = "$SAMPLE" ] || fail "پایتون → Node: انتظار «$SAMPLE» ولی «$OUT» آمد"
 echo "✓ پایتون رمز کرد، Node درست خواند"
