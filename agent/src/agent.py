@@ -180,6 +180,9 @@ def _persist(
     storage.save_messages(conversation_id, transcript)
     storage.end_conversation(conversation_id, int(time.monotonic() - started_at))
     logger.info("رونوشت با %s پیام ذخیره شد", len(transcript))
+    # رونوشت داده‌ی شخصی است؛ همین‌جا که به دیتابیس وصلیم و کاربر منتظر نیست،
+    # موارد قدیمی‌تر از مدت نگه‌داری پاک می‌شوند.
+    storage.purge_old_conversations()
 
 
 if __name__ == "__main__":

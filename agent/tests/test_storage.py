@@ -294,3 +294,91 @@ def test_migration_script_is_idempotent(tmp_path):
 
 if sys.platform == "win32":  # pragma: no cover
     pytest.skip("اسکریپت مهاجرت روی ویندوز آزموده نشده", allow_module_level=True)
+
+
+# ---------------------------------------------------------------------------
+# پاک‌سازی خودکار رونوشت‌های قدیمی
+# ---------------------------------------------------------------------------
+
+
+def _insert_conversation(db_path: Path, room: str, age_days: int) -> int:
+    """یک گفت‌وگو با تاریخ شروع مشخص در گذشته می‌سازد."""
+    conn = sqlite3.connect(db_path)
+    try:
+        cur = conn.execute(
+            "INSERT INTO conversations (room_name, started_at) "
+            "VALUES (?, datetime('now', ?)) RETURNING id",
+            (room, f"-{age_days} days"),
+        )
+        conversation_id = int(cur.fetchone()[0])
+        conn.execute(
+            "INSERT INTO messages (conversation_id, role, content) VALUES (?, 'user', 'سلام')",
+            (conversation_id,),
+        )
+        conn.commit()
+        return conversation_id
+    finally:
+        conn.close()
+
+
+def _count(db_path: Path, table: str) -> int:
+    conn = sqlite3.connect(db_path)
+    try:
+        return int(conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0])
+    finally:
+        conn.close()
+
+
+def test_purge_removes_only_conversations_past_retention(db: Path) -> None:
+    _insert_conversation(db, "اتاق-تازه", age_days=1)
+    _insert_conversation(db, "اتاق-کهنه", age_days=40)
+
+    assert storage.purge_old_conversations() == 1
+
+    conn = sqlite3.connect(db)
+    try:
+        rooms = [r[0] for r in conn.execute("SELECT room_name FROM conversations")]
+    finally:
+        conn.close()
+    assert rooms == ["اتاق-تازه"]
+
+
+def test_purge_also_removes_the_messages(db: Path) -> None:
+    # پیام‌ها با CASCADE پاک می‌شوند؛ اگر کلید خارجی روشن نباشد، متن گفته‌های
+    # کاربر بی‌صدا در دیتابیس می‌ماند — دقیقاً همان چیزی که نباید بماند.
+    _insert_conversation(db, "اتاق-کهنه", age_days=40)
+    assert _count(db, "messages") == 1
+
+    storage.purge_old_conversations()
+
+    assert _count(db, "messages") == 0
+
+
+def test_zero_retention_means_keep_everything(db: Path) -> None:
+    _insert_conversation(db, "اتاق-خیلی-کهنه", age_days=4000)
+    write(
+        db,
+        "INSERT INTO settings (key, value) VALUES (?, ?) "
+        "ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+        "transcript_retention_days",
+        "0",
+    )
+
+    assert storage.purge_old_conversations() == 0
+    assert _count(db, "conversations") == 1
+
+
+def test_invalid_retention_falls_back_to_the_default(db: Path) -> None:
+    write(
+        db,
+        "INSERT INTO settings (key, value) VALUES (?, ?) "
+        "ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+        "transcript_retention_days",
+        "هرچه",
+    )
+    assert storage.retention_days() == 30
+
+
+def test_purge_without_a_database_is_harmless(no_db: None) -> None:
+    # نبود دیتابیس نباید ایجنت را بشکند؛ همان قاعده‌ی همیشگی این ماژول.
+    assert storage.purge_old_conversations() == 0

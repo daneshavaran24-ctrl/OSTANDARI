@@ -252,3 +252,45 @@ def end_conversation(conversation_id: int, duration_seconds: int) -> None:
             )
     except sqlite3.Error as e:
         logger.warning("بستن ردیف گفت‌وگو ناموفق بود: %s", e)
+
+
+def retention_days() -> int:
+    """مدت نگه‌داری رونوشت‌ها به روز. صفر یا کمتر یعنی پاک‌سازی خودکار خاموش است."""
+    raw = get_setting("transcript_retention_days", default="30")
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        logger.warning("مقدار نامعتبر برای transcript_retention_days: %r", raw)
+        return 30
+
+
+def purge_old_conversations() -> int:
+    """
+    گفت‌وگوهای قدیمی‌تر از مدت نگه‌داری را پاک می‌کند و تعدادشان را برمی‌گرداند.
+
+    رونوشت شامل گفته‌های واقعی کاربر است، یعنی داده‌ی شخصی. نگه داشتن نامحدودش
+    یک انتخاب نیست، پس این پاک‌سازی در پایان هر نشست اجرا می‌شود — همان‌جایی که
+    به‌هرحال به دیتابیس وصل هستیم و کاربر دیگر منتظر پاسخ نیست.
+
+    پیام‌ها با ON DELETE CASCADE همراه گفت‌وگو پاک می‌شوند.
+    """
+    days = retention_days()
+    if days <= 0:
+        return 0
+
+    try:
+        with _connect() as conn:
+            if conn is None:
+                return 0
+            cur = conn.execute(
+                "DELETE FROM conversations WHERE started_at < datetime('now', ?)",
+                (f"-{days} days",),
+            )
+            removed = cur.rowcount or 0
+    except sqlite3.Error as e:
+        logger.warning("پاک‌سازی رونوشت‌های قدیمی ناموفق بود: %s", e)
+        return 0
+
+    if removed:
+        logger.info("%d گفت‌وگوی قدیمی‌تر از %d روز پاک شد", removed, days)
+    return removed
