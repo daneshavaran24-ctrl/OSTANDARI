@@ -1,0 +1,32 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+    groups:
+      # به‌روزرسانی‌های جزئی در یک PR جمع می‌شوند تا سیل PR راه نیفتد؛
+      # ارتقای major جدا می‌آید چون بازبینی دستی لازم دارد.
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /demo-app
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: uv
+    directory: /agent
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+    # نسخه‌ی livekit-agents عمداً روی خط ۱.۸.x پین است؛ جزئیات در agent/AGENTS.md
+    ignore:
+      - dependency-name: livekit-agents
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }

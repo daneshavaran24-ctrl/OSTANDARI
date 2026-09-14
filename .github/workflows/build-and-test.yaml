@@ -26,13 +26,19 @@ jobs:
           cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: ESLint
         run: pnpm lint
 
       - name: Prettier
         run: pnpm format:check
+
+      - name: TypeScript
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
 
       - name: Ensure build succeeds
         run: pnpm build
@@ -53,10 +59,16 @@ jobs:
           cache-dependency-path: demo-app/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: ESLint
         run: npm run lint
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
 
       - name: Ensure build succeeds
         run: npm run build
@@ -92,5 +104,68 @@ jobs:
       - name: Ruff format
         run: uv run ruff format --check
 
+      - name: Mypy
+        run: uv run mypy
+
       - name: Pytest
         run: uv run pytest -q
+
+  e2e:
+    name: تست سرتاسری (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install demo app dependencies
+        working-directory: demo-app
+        run: npm ci --legacy-peer-deps
+
+      - name: Install Playwright
+        run: npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run end-to-end tests
+        run: npx playwright test
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  security:
+    name: امنیت (audit و اسکن کلید)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # اسکن کلید به کل تاریخچه نیاز دارد
+
+      - uses: pnpm/action-setup@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # سطح آستانه high است: موارد متوسط در وابستگی‌های ابزار توسعه بیلد را
+      # نمی‌شکنند، ولی هر چیز شدید یا بحرانی باید جلوی merge را بگیرد.
+      - name: Audit frontend
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile && pnpm audit --audit-level high
+
+      - name: Audit demo app
+        working-directory: demo-app
+        run: npm ci --legacy-peer-deps && npm audit --audit-level=high
+
+      - name: Scan history for leaked secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

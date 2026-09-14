@@ -47,6 +47,7 @@ OSTANDARI/
 │   │   ├── agent.py        نقطه‌ی ورود — نامش را عوض نکنید
 │   │   ├── prompts.py      دستورهای ایجنت (فارسی)
 │   │   ├── audio.py        انتخاب نویزگیر از روی محیط
+│   │   ├── guards.py       اعتبارسنجی ورودی ابزارها و سقف استفاده
 │   │   └── tools.py        ابزارهای unblock_user و send_email
 │   ├── tests/test_agent.py تست‌های منطق ابزارها (بدون کلید)
 │   ├── scenarios.yaml      سناریوهای گفت‌وگو برای lk agent simulate
@@ -64,8 +65,10 @@ OSTANDARI/
 │   ├── public/blockusers.txt   فایلی که ایجنت پاکش می‌کند
 │   └── reset-demo.sh       بازگرداندن وضعیت اولیه‌ی دمو
 │
+├── e2e/                    تست سرتاسری با Playwright
 ├── .claude/skills/ و .agents/skills/   skill رسمی لایوکیت (دو نسخه‌ی یکسان)
 ├── .github/workflows/      CI
+├── SECURITY.md             مدل تهدید و محدودیت‌های شناخته‌شده
 └── docs/                   لایسنس‌های بالادستی
 ```
 
@@ -106,7 +109,7 @@ cp .env.example frontend/.env.local
 
 ```bash
 # اپ دمو  →  http://localhost:8080
-cd demo-app && npm install && npm run dev
+cd demo-app && npm ci --legacy-peer-deps && npm run dev
 
 # ایجنت
 cd agent && uv sync && uv run src/agent.py dev
@@ -223,12 +226,28 @@ uv sync
 - **آواتار اختیاری است.** اگر `BEY_AVATAR_ID` را خالی بگذارید، ایجنت بالا می‌آید
   و گفت‌وگوی صوتی کار می‌کند، فقط تصویری نمایش داده نمی‌شود. برای تست سریع مفید است.
 
+## امنیت
+
+پیش از انتشار عمومی، [`SECURITY.md`](SECURITY.md) را بخوانید — مدل تهدید،
+محافظت‌های موجود و **محدودیت‌های شناخته‌شده** آن‌جا فهرست شده‌اند.
+
+دو تنظیم که قبل از هر استقراری باید انجام دهید:
+
+```bash
+ACCESS_CODE=<یک کد قوی>           # وگرنه هرکسی می‌تواند گفت‌وگو باز کند
+EMAIL_ALLOWED_DOMAINS=ostandari.ir # وگرنه ایجنت به هر نشانی ایمیل می‌فرستد
+```
+
+بدون `ACCESS_CODE` فقط محدودیت نرخ فعال است؛ برای دمو کافی است، برای استقرار
+عمومی نه.
+
 ## توسعه
 
 ```bash
-cd frontend && pnpm lint && pnpm format:check && pnpm build
-cd demo-app && npm run lint && npm run build
-cd agent   && uv run ruff check && uv run ruff format --check && uv run pytest -q
+cd agent    && uv run ruff check && uv run ruff format --check && uv run mypy && uv run pytest -q
+cd frontend && pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build
+cd demo-app && npm run lint && npm run typecheck && npm test && npm run build
+npx playwright test          # سرتاسری، در مرورگر واقعی
 ```
 
 همین‌ها در CI هم اجرا می‌شوند (`.github/workflows/build-and-test.yaml`).
@@ -243,7 +262,16 @@ cd agent   && uv run ruff check && uv run ruff format --check && uv run pytest -
 | `task check` | لینت، قالب‌بندی و تست‌ها |
 | `task simulate` | اجرای سناریوهای گفت‌وگو (نیازمند LiveKit CLI) |
 
-### تست ایجنت
+### تست
+
+| جایی | چه چیزی | چند |
+|---|---|---|
+| `agent/tests/` | منطق ابزارها، مهارهای امنیتی، انتخاب نویزگیر | ۶۸ |
+| `frontend/tests/` | کد دسترسی، محدودیت نرخ، انقضای توکن، payload اعلان | ۲۶ |
+| `demo-app/tests/` | تشخیص کاربر مسدود | ۱۳ |
+| `e2e/` | سناریوی کامل ورود و رفع مسدودیت، در مرورگر واقعی | ۴ |
+
+هیچ‌کدام کلید API لازم ندارند و همه در CI اجرا می‌شوند.
 
 تست‌های `agent/tests/test_agent.py` منطق ابزارها را می‌سنجند و هیچ کلید یا شبکه‌ای
 لازم ندارند. رفتار گفت‌وگویی در `agent/scenarios.yaml` پوشش داده می‌شود و برای

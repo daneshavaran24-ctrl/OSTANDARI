@@ -1,0 +1,11 @@
+# مالک پیش‌فرض همه‌ی فایل‌ها
+*                       @daneshavaran24-ctrl
+
+# تغییر در این مسیرها روی مرزهای امنیتی اثر می‌گذارد و باید با دقت بیشتری
+# بازبینی شود.
+/SECURITY.md            @daneshavaran24-ctrl
+/agent/src/guards.py    @daneshavaran24-ctrl
+/frontend/lib/          @daneshavaran24-ctrl
+/frontend/app/api/      @daneshavaran24-ctrl
+/frontend/next.config.ts @daneshavaran24-ctrl
+/.github/workflows/     @daneshavaran24-ctrl
