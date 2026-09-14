@@ -5,3 +5,5 @@ playwright-report
 agent
 frontend
 demo-app
+# مستندات فارسی دستی قالب‌بندی می‌شوند؛ شکستن خط prettier متن راست‌به‌چپ را بدتر می‌کند
+*.md

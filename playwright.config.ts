@@ -11,6 +11,10 @@ import { E2E_ADMIN_PASSWORD, E2E_DB, E2E_KEY } from './e2e/fixtures';
  */
 export default defineConfig({
   testDir: './e2e',
+  // آزمون‌های زنده پیکربندی خودشان را دارند (playwright.live.config.ts): سرور
+  // LiveKit بالا می‌آورند و در لایه‌ی صوتی کلید واقعی مصرف می‌کنند. اجرای
+  // معمولی نباید آن هزینه را بدهد.
+  testIgnore: '**/live/**',
   globalSetup: './e2e/global-setup.ts',
   fullyParallel: false, // تست‌ها فایل مشترک blockusers.txt را عوض می‌کنند
   workers: 1,

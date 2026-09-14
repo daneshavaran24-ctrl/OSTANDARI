@@ -36,6 +36,9 @@ where = ["src"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+# tests/live/ اسکریپت‌های آزمون زنده‌اند، نه تست واحد: به سرور و کلید واقعی
+# نیاز دارند و از Playwright اجرا می‌شوند، نه از pytest.
+norecursedirs = ["live"]
 addopts = "--cov=src --cov-report=term-missing --cov-fail-under=80"
 
 [tool.coverage.run]
