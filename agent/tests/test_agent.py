@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 from livekit import rtc
 
+import guards
 import tools
 from tools import ToolError
 
@@ -167,6 +168,92 @@ async def test_unblock_user_clears_file_then_notifies(monkeypatch, tmp_path, roo
     assert block_file.read_text() == "", "فایل مسدودی پاک نشد"
     assert sent == {"type": "unblock_user", "username": "maxman123"}
     assert "maxman123" in result
+
+
+async def test_unblock_user_removes_only_the_named_user(monkeypatch, tmp_path, room):
+    """
+    مهم‌ترین تست این فایل.
+
+    نسخه‌ی اولیه با write_text("") کل فایل را خالی می‌کرد، یعنی یک درخواست رفع
+    مسدودیت برای یک نفر، همه‌ی کاربران مسدود را آزاد می‌کرد. تست قبلی این را
+    نمی‌گرفت چون فایل آزمایشی فقط یک کاربر داشت.
+    """
+    block_file = tmp_path / "blockusers.txt"
+    block_file.write_text("alice\nmaxman123\nbob\n", encoding="utf-8")
+    monkeypatch.setenv("BLOCK_USERS_FILE", str(block_file))
+
+    async def fake_notify(payload):
+        return "ok"
+
+    monkeypatch.setattr(tools, "_notify_client", fake_notify)
+    room({"voice_assistant_user_42": HUMAN})
+
+    await tools.unblock_user(context=None, username="\\vienna\\maxman123")
+
+    remaining = block_file.read_text().split()
+    assert remaining == ["alice", "bob"], (
+        f"فقط maxman123 باید حذف می‌شد، ولی فایل شد: {remaining}"
+    )
+
+
+async def test_unblock_user_reports_when_the_user_was_not_blocked(
+    monkeypatch, tmp_path, room
+):
+    """
+    اگر کاربر اصلاً مسدود نبود، نباید ادعای موفقیت کند — وگرنه مدل به کاربر
+    می‌گوید مشکل حل شد در حالی که علت ورود نکردنش چیز دیگری است.
+    """
+    block_file = tmp_path / "blockusers.txt"
+    block_file.write_text("alice\n", encoding="utf-8")
+    monkeypatch.setenv("BLOCK_USERS_FILE", str(block_file))
+    room({"voice_assistant_user_42": HUMAN})
+
+    result = await tools.unblock_user(context=None, username="maxman123")
+
+    assert "نیست" in result
+    assert block_file.read_text() == "alice\n", "فایل نباید دست می‌خورد"
+
+
+async def test_unblock_user_is_rate_limited(monkeypatch, tmp_path, room):
+    """یک مدل گمراه‌شده نباید بتواند بی‌نهایت بار ابزار را صدا بزند."""
+    block_file = tmp_path / "blockusers.txt"
+    block_file.write_text("alice\n", encoding="utf-8")
+    monkeypatch.setenv("BLOCK_USERS_FILE", str(block_file))
+    monkeypatch.setenv("UNBLOCK_MAX_PER_SESSION", "2")
+    room({"voice_assistant_user_42": HUMAN})
+    guards.reset_usage()
+
+    for _ in range(2):
+        await tools.unblock_user(context=None, username="alice")
+    result = await tools.unblock_user(context=None, username="alice")
+
+    assert "سقف" in result
+
+
+async def test_send_email_rejects_an_invalid_address(monkeypatch):
+    """اعتبارسنجی باید قبل از رسیدن به SMTP جلویش را بگیرد."""
+    monkeypatch.setenv("GMAIL_USER", "a@b.com")
+    monkeypatch.setenv("GMAIL_APP_PASSWORD", "x")
+    guards.reset_usage()
+
+    result = await tools.send_email(
+        context=None, to_email="not-an-email", subject="تست", message="متن"
+    )
+    assert "معتبر نیست" in result
+
+
+async def test_send_email_rejects_header_injection(monkeypatch):
+    monkeypatch.setenv("GMAIL_USER", "a@b.com")
+    monkeypatch.setenv("GMAIL_APP_PASSWORD", "x")
+    guards.reset_usage()
+
+    result = await tools.send_email(
+        context=None,
+        to_email="victim@example.com",
+        subject="سلام\nBcc: attacker@evil.com",
+        message="متن",
+    )
+    assert "خط جدید" in result
 
 
 async def test_unblock_user_still_succeeds_when_notification_fails(

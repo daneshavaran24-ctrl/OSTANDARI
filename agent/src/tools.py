@@ -10,6 +10,15 @@ from pathlib import Path
 from livekit import rtc
 from livekit.agents import RunContext, ToolError, function_tool, get_job_context
 
+from guards import (
+    GuardError,
+    allowed_email_domains,
+    check_and_count,
+    normalize_username,
+    validate_email_address,
+    validate_email_content,
+)
+
 logger = logging.getLogger(__name__)
 
 # مسیر فایل کاربران مسدودشده که اپ دمو آن را سرو می‌کند.
@@ -22,6 +31,14 @@ DEFAULT_BLOCK_FILE = (
 
 def _block_file() -> Path:
     return Path(os.getenv("BLOCK_USERS_FILE", str(DEFAULT_BLOCK_FILE)))
+
+
+def _session_id() -> str:
+    """نام اتاق به‌عنوان شناسه‌ی نشست، برای شمارش سقف استفاده از ابزارها."""
+    try:
+        return get_job_context().room.name
+    except Exception:  # بیرون از یک job واقعی (تست، یا قبل از اتصال)
+        return "unknown-session"
 
 
 def _human_participant_identity() -> str:
@@ -44,7 +61,7 @@ def _human_participant_identity() -> str:
     raise ToolError("هیچ کاربری در اتاق حضور ندارد تا اعلان برایش ارسال شود.")
 
 
-async def _notify_client(payload: dict) -> str:
+async def _notify_client(payload: dict[str, str]) -> str:
     """
     اعلان بصری را روی کلاینت نمایش می‌دهد.
 
@@ -64,10 +81,17 @@ async def _notify_client(payload: dict) -> str:
 
 
 @function_tool()
-async def unblock_user(context: RunContext, username: str) -> str:
+async def unblock_user(context: RunContext[None], username: str) -> str:
     """
-    رفع مسدودیت کاربر تا بتواند دوباره وارد سامانه شود.
+    رفع مسدودیت یک کاربر مشخص تا بتواند دوباره وارد سامانه شود.
     """
+    try:
+        target = normalize_username(username)
+        check_and_count("unblock_user", _session_id())
+    except GuardError as e:
+        logger.warning("درخواست unblock_user رد شد: %s", e)
+        return str(e)
+
     block_file = _block_file()
 
     try:
@@ -75,30 +99,46 @@ async def unblock_user(context: RunContext, username: str) -> str:
             logger.error("فایل کاربران مسدودشده پیدا نشد: %s", block_file)
             return "رفع مسدودیت ناموفق بود: فایل blockusers.txt پیدا نشد."
 
-        block_file.write_text("", encoding="utf-8")
-        logger.info("فایل %s پاک شد", block_file)
+        # فقط همین کاربر حذف می‌شود. نسخه‌ی قبلی کل فایل را خالی می‌کرد، یعنی
+        # با یک درخواست همه‌ی کاربران مسدود آزاد می‌شدند.
+        lines = block_file.read_text(encoding="utf-8").splitlines()
+        remaining = [ln for ln in lines if ln.strip().lower() != target]
+
+        if len(remaining) == len(lines):
+            logger.info("کاربر %s در فهرست مسدودی نبود", target)
+            return (
+                f"کاربر {target} در فهرست مسدودشده‌ها نیست، پس مسدودیتی برای "
+                f"برداشتن وجود ندارد. مشکل ورود او علت دیگری دارد."
+            )
+
+        block_file.write_text("".join(f"{ln}\n" for ln in remaining), encoding="utf-8")
+        logger.info(
+            "کاربر %s از فهرست مسدودی حذف شد؛ %d کاربر دیگر دست‌نخورده ماند",
+            target,
+            len(remaining),
+        )
     except OSError as e:
-        logger.error("خطا در پاک کردن فایل کاربران مسدودشده: %s", e)
+        logger.error("خطا در نوشتن فایل کاربران مسدودشده: %s", e)
         raise ToolError(
             "در حال حاضر امکان استفاده از ابزار unblock_user وجود ندارد."
         ) from e
 
     try:
-        response = await _notify_client({"type": "unblock_user", "username": username})
+        response = await _notify_client({"type": "unblock_user", "username": target})
         logger.info("پاسخ اعلان unblock_user: %s", response)
-        return f"مسدودیت کاربر {username} برداشته شد و اعلان روی صفحه نمایش داده شد."
+        return f"مسدودیت کاربر {target} برداشته شد و اعلان روی صفحه نمایش داده شد."
     except Exception as rpc_error:
         # مسدودیت واقعاً برداشته شده؛ فقط اعلان بصری نرسیده است.
         logger.error("خطای RPC هنگام ارسال اعلان unblock_user: %s", rpc_error)
         return (
-            f"مسدودیت کاربر {username} برداشته شد، ولی نمایش اعلان روی صفحه "
+            f"مسدودیت کاربر {target} برداشته شد، ولی نمایش اعلان روی صفحه "
             f"ناموفق بود: {rpc_error}"
         )
 
 
 @function_tool()
 async def send_email(
-    context: RunContext,  # type: ignore
+    context: RunContext[None],
     to_email: str,
     subject: str,
     message: str,
@@ -113,6 +153,18 @@ async def send_email(
         message: متن ایمیل
         cc_email: نشانی رونوشت (اختیاری)
     """
+    # آرگومان‌ها را یک مدل زبانی تولید کرده و کاربر دیکته کرده است، پس قبل از
+    # رسیدن به SMTP باید مثل ورودی یک API عمومی اعتبارسنجی شوند.
+    try:
+        to_email = validate_email_address(to_email, field="نشانی گیرنده")
+        if cc_email:
+            cc_email = validate_email_address(cc_email, field="نشانی رونوشت")
+        subject, message = validate_email_content(subject, message)
+        check_and_count("send_email", _session_id())
+    except GuardError as e:
+        logger.warning("درخواست send_email رد شد: %s", e)
+        return str(e)
+
     smtp_server = "smtp.gmail.com"
     smtp_port = 587
 
@@ -122,6 +174,12 @@ async def send_email(
     if not gmail_user or not gmail_password:
         logger.error("اطلاعات ورود Gmail در متغیرهای محیطی تنظیم نشده است")
         return "ارسال ایمیل ناموفق بود: اطلاعات ورود Gmail تنظیم نشده است."
+
+    if not allowed_email_domains():
+        logger.warning(
+            "EMAIL_ALLOWED_DOMAINS تنظیم نشده است: ایجنت می‌تواند به هر نشانی "
+            "ایمیل بفرستد. برای استقرار واقعی حتماً تنظیمش کنید."
+        )
 
     try:
         msg = MIMEMultipart()

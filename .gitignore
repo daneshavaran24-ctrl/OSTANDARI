@@ -74,3 +74,10 @@ KMS
 .cursor/chat/
 .cursor/rules/*.local.mdc
 .github/personal-instructions.md
+
+# ---------- پوشش تست ----------
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.mypy_cache/

@@ -6,6 +6,7 @@
 
 import logging
 import os
+from typing import Any
 
 from livekit.plugins import ai_coustics, noise_cancellation
 
@@ -32,7 +33,7 @@ def _ai_coustics_models() -> list[str]:
     return sorted(m for m in dir(ai_coustics.EnhancerModel) if m.isupper())
 
 
-def _ai_coustics_model():
+def _ai_coustics_model() -> Any:
     """مدل ai-coustics را از AI_COUSTICS_MODEL می‌خواند."""
     raw = os.getenv("AI_COUSTICS_MODEL", "").strip() or DEFAULT_AI_COUSTICS_MODEL
     name = raw.upper().replace("-", "_")
@@ -46,7 +47,7 @@ def _ai_coustics_model():
     return model
 
 
-def build_noise_cancellation():
+def build_noise_cancellation() -> Any:
     """
     نویزگیر ورودی صدا را می‌سازد تا به room_io.AudioInputOptions داده شود.
 

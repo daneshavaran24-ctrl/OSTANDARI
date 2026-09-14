@@ -38,13 +38,13 @@ server = AgentServer()
 
 
 @server.rtc_session(agent_name="ostandari-support")
-async def ostandari_support(ctx: JobContext):
+async def ostandari_support(ctx: JobContext) -> None:
     ctx.log_context_fields = {
         "room": ctx.room.name,
     }
 
     # مدل Realtime اوپن‌ای‌آی: صدا → استدلال → صدا
-    session = AgentSession(
+    session: AgentSession[None] = AgentSession(
         llm=openai.realtime.RealtimeModel(
             model=os.getenv("OPENAI_REALTIME_MODEL", "gpt-realtime"),
             voice=os.getenv("OPENAI_VOICE", "cedar"),
