@@ -120,19 +120,76 @@ METHODS = {
 }
 
 
-def human_participant_identity() -> str:
+def active_room(room: rtc.Room | None = None) -> rtc.Room:
+    """
+    اتاق جاری.
+
+    پارامتر `room` برای جایی است که context ایجنت وجود ندارد — مثل
+    `tests/live/rpc_probe.py` که همین کد را روی یک سرور واقعی می‌آزماید.
+    بدون این درز، تست زنده مجبور می‌شد مسیر جداگانه‌ای بنویسد و آن‌وقت چیزی
+    را می‌سنجید که در تولید اجرا نمی‌شود.
+    """
+    return room if room is not None else get_job_context().room
+
+
+def human_participant_identity(room: rtc.Room | None = None) -> str:
     """
     شناسه‌ی کاربر انسانی در اتاق.
 
     آواتار هم یک شرکت‌کننده است و kind آن عدد است، نه رشته — مقایسه با متن
     هرگز درست نمی‌شود و اعلان به‌جای کاربر برای آواتار فرستاده می‌شود.
     """
-    room = get_job_context().room
+    room = active_room(room)
     for identity, participant in room.remote_participants.items():
         if participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_AGENT:
             continue
         return identity
     raise RpcError("هیچ کاربری در اتاق حضور ندارد.")
+
+
+async def _perform(
+    room: rtc.Room,
+    identity: str,
+    method: str,
+    payload: dict[str, Any],
+) -> str:
+    """
+    فراخوانی واقعی، با نگهبان قطع شدن کاربر.
+
+    ⚠️ بدون این نگهبان، اگر کاربر وسط تأییدخواهی تب را ببندد، `perform_rpc` تا
+    آخرِ مهلت منتظر می‌ماند — در آزمون زنده اندازه گرفته شد: **۱۲۳ ثانیه**.
+    در تمام آن مدت ایجنت بلوکه است و مدل Realtime همچنان هزینه می‌سازد.
+    خودِ SDK از رفتن مخاطب خبردار می‌شود ولی فراخوانی معلق را لغو نمی‌کند، پس
+    اینجا دستی مسابقه می‌گذاریم.
+    """
+    left = asyncio.Event()
+
+    def on_disconnected(participant: rtc.RemoteParticipant) -> None:
+        if participant.identity == identity:
+            left.set()
+
+    room.on("participant_disconnected", on_disconnected)
+
+    call = asyncio.create_task(
+        room.local_participant.perform_rpc(
+            destination_identity=identity,
+            method=method,
+            payload=json.dumps(payload),
+            response_timeout=METHODS[method].timeout,
+        )
+    )
+    gone = asyncio.create_task(left.wait())
+
+    try:
+        done, _ = await asyncio.wait({call, gone}, return_when=asyncio.FIRST_COMPLETED)
+        if call in done:
+            return str(call.result())
+        raise RpcError(f"کاربر پیش از پاسخ به {method} اتاق را ترک کرد")
+    finally:
+        room.off("participant_disconnected", on_disconnected)
+        for task in (call, gone):
+            if not task.done():
+                task.cancel()
 
 
 async def call_client(
@@ -141,6 +198,7 @@ async def call_client(
     *,
     conversation_id: int | None = None,
     delay: float = 0.0,
+    room: rtc.Room | None = None,
 ) -> dict[str, Any]:
     """
     یک متد مجاز را روی مرورگر کاربر اجرا می‌کند و پاسخش را برمی‌گرداند.
@@ -163,16 +221,13 @@ async def call_client(
     if delay > 0:
         await asyncio.sleep(delay)
 
-    identity = human_participant_identity()
-    room = get_job_context().room
+    target = active_room(room)
+    identity = human_participant_identity(target)
     started = time.monotonic()
 
     try:
-        raw = await room.local_participant.perform_rpc(
-            destination_identity=identity,
-            method=method,
-            payload=json.dumps({**payload, "action_id": action_id}),
-            response_timeout=METHODS[method].timeout,
+        raw = await _perform(
+            target, identity, method, {**payload, "action_id": action_id}
         )
     except Exception as e:
         elapsed = int((time.monotonic() - started) * 1000)
@@ -213,6 +268,7 @@ async def notify(
     *,
     conversation_id: int | None = None,
     delay: float = 3.0,
+    room: rtc.Room | None = None,
 ) -> bool:
     """
     اعلان روی صفحه‌ی کاربر. اگر ناموفق بود False می‌دهد، استثنا پرتاب نمی‌کند.
@@ -226,6 +282,7 @@ async def notify(
             {"kind": kind, "message": message},
             conversation_id=conversation_id,
             delay=delay,
+            room=room,
         )
         return True
     except RpcError:
@@ -239,6 +296,7 @@ async def confirm(
     confirm_label: str = "تأیید",
     cancel_label: str = "انصراف",
     conversation_id: int | None = None,
+    room: rtc.Room | None = None,
 ) -> bool:
     """
     از کاربر تأیید صریح می‌گیرد.
@@ -256,6 +314,7 @@ async def confirm(
                 "cancel_label": cancel_label,
             },
             conversation_id=conversation_id,
+            room=room,
         )
     except RpcError:
         return False

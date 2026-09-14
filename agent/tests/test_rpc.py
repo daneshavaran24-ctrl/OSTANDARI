@@ -6,6 +6,7 @@
 نرسد، پاسخ باید «نه» باشد.
 """
 
+import asyncio
 import json
 import types
 
@@ -25,16 +26,43 @@ AVATAR = FakeParticipant(rtc.ParticipantKind.PARTICIPANT_KIND_AGENT)
 HUMAN = FakeParticipant(rtc.ParticipantKind.PARTICIPANT_KIND_STANDARD)
 
 
+NEVER = object()
+
+
 class FakeLocalParticipant:
     def __init__(self, response: object) -> None:
         self.response = response
         self.calls: list[dict] = []
+        # پاسخ هرگز نمی‌آید — برای آزمودن حالت «کاربر رفت»
+        self.never_answers = response is NEVER
 
     async def perform_rpc(self, **kwargs):
         self.calls.append(kwargs)
+        if self.never_answers:
+            await asyncio.sleep(3600)
         if isinstance(self.response, Exception):
             raise self.response
         return self.response
+
+
+class FakeRoom:
+    """اتاق جعلی با همان قرارداد رویدادی که rtc.Room دارد."""
+
+    def __init__(self, participants: dict, local: FakeLocalParticipant) -> None:
+        self.remote_participants = participants
+        self.local_participant = local
+        self.handlers: dict[str, list] = {}
+
+    def on(self, event: str, handler) -> None:
+        self.handlers.setdefault(event, []).append(handler)
+
+    def off(self, event: str, handler) -> None:
+        self.handlers.get(event, []).remove(handler)
+
+    def emit_disconnect(self, identity: str) -> None:
+        participant = types.SimpleNamespace(identity=identity)
+        for handler in list(self.handlers.get("participant_disconnected", [])):
+            handler(participant)
 
 
 @pytest.fixture
@@ -43,15 +71,16 @@ def room(monkeypatch):
 
     def _set(response: object = '{"ok": true}', participants: dict | None = None):
         local = FakeLocalParticipant(response)
-        fake = types.SimpleNamespace(
-            remote_participants=participants
+        fake = FakeRoom(
+            participants
             if participants is not None
             else {"bey-avatar": AVATAR, "user-42": HUMAN},
-            local_participant=local,
+            local,
         )
         monkeypatch.setattr(
             rpc, "get_job_context", lambda: types.SimpleNamespace(room=fake)
         )
+        _set.room = fake
         return local
 
     return _set
@@ -209,3 +238,78 @@ async def test_confirm_waits_longer_than_a_notification(room):
         rpc.METHODS["show_confirmation"].timeout
         > rpc.METHODS["show_notification"].timeout
     )
+
+
+# ---------------------------------------------------------------------------
+# رفتن کاربر وسط فراخوانی
+# ---------------------------------------------------------------------------
+
+
+async def test_user_leaving_cancels_a_pending_call(room):
+    """
+    اگر کاربر تب را ببندد، فراخوانی معلق باید فوری شکست بخورد.
+
+    بدون این، `perform_rpc` تا آخر مهلت منتظر می‌ماند — در آزمون زنده روی یک
+    سرور واقعی ۱۲۳ ثانیه اندازه گرفته شد. در تمام آن مدت ایجنت بلوکه است و مدل
+    Realtime همچنان هزینه می‌سازد.
+    """
+    room(response=NEVER)
+    fake = room.room
+
+    async def leave_soon():
+        await asyncio.sleep(0.05)
+        fake.emit_disconnect("user-42")
+
+    asyncio.get_running_loop().create_task(leave_soon())
+
+    with pytest.raises(rpc.RpcError):
+        await asyncio.wait_for(
+            rpc.call_client("show_confirmation", {"title": "عنوان", "message": "متن"}),
+            timeout=5,
+        )
+
+
+async def test_someone_else_leaving_does_not_cancel(room):
+    """رفتن آواتار نباید تأییدخواهی کاربر را لغو کند."""
+    room(response=NEVER)
+    fake = room.room
+
+    async def other_leaves():
+        await asyncio.sleep(0.05)
+        fake.emit_disconnect("bey-avatar")
+
+    asyncio.get_running_loop().create_task(other_leaves())
+
+    with pytest.raises(asyncio.TimeoutError):
+        await asyncio.wait_for(
+            rpc.call_client("show_confirmation", {"title": "عنوان", "message": "متن"}),
+            timeout=0.5,
+        )
+
+
+async def test_confirm_is_false_when_the_user_leaves(room):
+    room(response=NEVER)
+    fake = room.room
+
+    async def leave_soon():
+        await asyncio.sleep(0.05)
+        fake.emit_disconnect("user-42")
+
+    asyncio.get_running_loop().create_task(leave_soon())
+
+    assert await rpc.confirm("ارسال ایمیل", "فرستاده شود؟") is False
+
+
+async def test_the_disconnect_handler_is_removed_afterwards(room):
+    """
+    هندلر باید پاک شود.
+
+    وگرنه هر فراخوانی یکی اضافه می‌کند و در یک گفت‌وگوی طولانی صدها هندلر روی
+    هم جمع می‌شوند.
+    """
+    room()
+    fake = room.room
+
+    await rpc.call_client("set_avatar_state", {"state": "idle"})
+
+    assert fake.handlers.get("participant_disconnected", []) == []
