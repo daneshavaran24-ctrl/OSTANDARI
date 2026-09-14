@@ -77,7 +77,9 @@ OSTANDARI/
 ├── .claude/skills/ و .agents/skills/   skill رسمی لایوکیت (دو نسخه‌ی یکسان)
 ├── .github/workflows/      CI
 ├── SECURITY.md             مدل تهدید و محدودیت‌های شناخته‌شده
-└── docs/                   لایسنس‌های بالادستی
+└── docs/
+    ├── ARCHITECTURE-AUDIT.md   گزارش معماری و نقشه‌ی راه آواتار سازمانی
+    └── ...                     لایسنس‌های بالادستی
 ```
 
 ## پیش‌نیازها
