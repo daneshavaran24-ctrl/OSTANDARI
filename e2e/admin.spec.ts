@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { type Page, expect, test } from '@playwright/test';
 import { DatabaseSync } from 'node:sqlite';
 import { E2E_ADMIN_PASSWORD, E2E_DB } from './fixtures';
 
@@ -16,6 +16,20 @@ async function login(page: import('@playwright/test').Page) {
   await page.getByLabel('رمز عبور').fill(E2E_ADMIN_PASSWORD);
   await page.getByRole('button', { name: 'ورود' }).click();
   await expect(page).toHaveURL(/\/admin$/);
+}
+
+/**
+ * مقدار یک فیلد تنظیمات را می‌گذارد.
+ *
+ * صبر کردن برای مقدار اولیه لازم است: صفحه تنظیمات را async می‌خواند و اگر
+ * پیش از رسیدن پاسخ تایپ کنیم، React مقدار سرور را روی آن می‌نویسد و نتیجه
+ * چیزی مثل «۷۵۴۵» می‌شود — یک تست ناپایدار که گاهی سبز است.
+ */
+async function setSetting(page: Page, label: string, value: string) {
+  const field = page.getByLabel(label);
+  await expect(field).not.toHaveValue('');
+  await field.fill(value);
+  await expect(field).toHaveValue(value);
 }
 
 test.describe('احراز هویت پنل', () => {
@@ -50,6 +64,7 @@ test.describe('تنظیمات', () => {
     const field = page.getByLabel('مدت هر گفت‌وگو (ثانیه)');
     await expect(field).toHaveValue('300');
     await field.fill('75');
+    await expect(field).toHaveValue('75');
     await page.getByRole('button', { name: 'ذخیره' }).click();
     await expect(page.getByRole('status')).toContainText('ذخیره شد');
 
@@ -64,7 +79,7 @@ test.describe('تنظیمات', () => {
 
   test('مدت کوتاه هشدار می‌دهد', async ({ page }) => {
     await login(page);
-    await page.getByLabel('مدت هر گفت‌وگو (ثانیه)').fill('30');
+    await setSetting(page, 'مدت هر گفت‌وگو (ثانیه)', '30');
     // با ۳۰ ثانیه گردش‌کار تیکت جا نمی‌شود؛ پنل باید صریح بگوید
     await expect(page.getByText(/گردش‌کار کامل پشتیبانی/)).toBeVisible();
   });
@@ -155,8 +170,7 @@ test.describe('تاریخچه‌ی گفت‌وگو', () => {
 test.describe('پیکربندی نشست', () => {
   test('مدت تعیین‌شده در پنل، بدون ورود هم برای اپ خوانده می‌شود', async ({ page, request }) => {
     await login(page);
-    const field = page.getByLabel('مدت هر گفت‌وگو (ثانیه)');
-    await field.fill('45');
+    await setSetting(page, 'مدت هر گفت‌وگو (ثانیه)', '45');
     await page.getByRole('button', { name: 'ذخیره' }).click();
     await expect(page.getByRole('status')).toContainText('ذخیره شد');
 

@@ -383,6 +383,15 @@ npx playwright test -c playwright.live.config.ts --project=rpc
 cd agent && lk agent simulate --scenarios scenarios.yaml
 ```
 
+### استقرار روی لیارا
+
+یک اپ داکری که هر دو فرایند را اجرا می‌کند، چون به یک SQLite مشترک نیاز دارند.
+گام‌ها، متغیرها و عیب‌یابی در [`docs/DEPLOY.md`](docs/DEPLOY.md).
+
+```
+Actions → Deploy to Liara → Run workflow
+```
+
 ### استقرار
 
 ```bash
