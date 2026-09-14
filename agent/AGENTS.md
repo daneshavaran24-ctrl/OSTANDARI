@@ -165,6 +165,25 @@ task check     # یا: uv run ruff check && uv run ruff format --check && uv run
 `transcript_retention_days` را پاک می‌کند؛ رونوشت داده‌ی شخصی است و نگه داشتن
 نامحدودش انتخاب نیست (بخش حریم خصوصی در `SECURITY.md`).
 
+## ⚠️ ایجنت با اعزام صریح کار می‌کند
+
+`@server.rtc_session(agent_name="ostandari-support")` در LiveKit یعنی **اعزام
+صریح**: هیچ کاری خودکار به هیچ اتاقی فرستاده نمی‌شود. توکن کاربر باید نام ایجنت
+را بخواهد:
+
+```ts
+// frontend/app/api/connection-details/route.ts
+at.roomConfig = new RoomConfiguration({
+  agents: [new RoomAgentDispatch({ agentName: AGENT_NAME })],
+});
+```
+
+اگر این بخش بیفتد یا نام‌ها از هم دور بیفتند، **هیچ خطایی رخ نمی‌دهد**: مرورگر
+وصل می‌شود، اتاق ساخته می‌شود، شمارش معکوس شروع می‌شود، و دستیار هرگز نمی‌آید.
+دو تست نگهبان این‌اند: `tests/test_dispatch.py` (نام‌ها را مقایسه می‌کند) و
+`e2e/live/rpc-dispatch.spec.ts` (روی یک سرور واقعی می‌آزماید که کار واقعاً به
+کارگر می‌رسد).
+
 ## ⚠️ ایجنت فارسی صحبت می‌کند
 
 `src/prompts.py` به فارسی نوشته شده و `src/agent.py` با سلام فارسی شروع می‌کند.
@@ -212,6 +231,15 @@ uv run pytest -q            # آستانه‌ی پوشش: ۸۰٪
 ```bash
 bash ../scripts/check-crypto-interop.sh
 ```
+
+و یک لایه‌ی زنده که ایجنت، سرور LiveKit و مرورگر را واقعاً کنار هم می‌گذارد:
+
+```bash
+cd .. && npx playwright test -c playwright.live.config.ts --project=rpc
+```
+
+`tests/live/` اسکریپت‌های همان لایه‌اند و pytest جمعشان نمی‌کند. توضیح کامل در
+`e2e/live/README.md`.
 
 **سناریوهای گفت‌وگو** (`scenarios.yaml`) رفتار واقعی ایجنت را می‌سنجند و به
 LiveKit CLI نسخه ۲.۱۵+ و کلیدهای معتبر نیاز دارند:
