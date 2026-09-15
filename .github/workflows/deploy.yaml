@@ -8,9 +8,20 @@ on:
       app:
         description: نام اپ در لیارا
         required: true
+      build_location:
+        description: بیلد کجا انجام شود
+        type: choice
+        options: [germany, iran]
+        default: germany
+      prebuilt:
+        description: ایمیج را همین‌جا بساز و فقط همان را مستقر کن (بیلد لیارا اصلاً اجرا نمی‌شود)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+  # برای فرستادن ایمیج به GHCR در حالت prebuilt
+  packages: write
 
 concurrency:
   # دو استقرار هم‌زمان روی یک اپ یعنی نتیجه‌ی غیرقابل‌پیش‌بینی
@@ -39,7 +50,7 @@ jobs:
         with:
           node-version: 22
 
-      - name: Deploy
+      - name: Check the token
         env:
           LIARA_TOKEN: ${{ secrets.LIARA_TOKEN }}
         run: |
@@ -47,8 +58,48 @@ jobs:
             echo "::error::LIARA_TOKEN تنظیم نشده است. آن را در Settings → Secrets → Actions بگذارید."
             exit 1
           fi
+
+      # --- مسیر ۱: ایمیج از پیش ساخته‌شده -----------------------------------
+      #
+      # بیلد لیارا مهلت زمانی دارد و این ایمیج بزرگ است. اینجا هیچ مهلتی نیست،
+      # پس ایمیج ساخته و به GHCR فرستاده می‌شود و لیارا فقط آن را می‌کشد.
+      #
+      # ⚠️ بسته‌ی GHCR باید **عمومی** باشد، وگرنه لیارا نمی‌تواند بکشدش. بار
+      # اول در GitHub → Packages → ostandari → Package settings آن را عمومی کنید.
+      - name: Push the image to GHCR
+        if: ${{ inputs.prebuilt }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_SHA::12}"
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker tag ostandari:ci "$image"
+          docker push "$image"
+          echo "IMAGE=$image" >> "$GITHUB_ENV"
+
+      - name: Deploy the prebuilt image
+        if: ${{ inputs.prebuilt }}
+        env:
+          LIARA_TOKEN: ${{ secrets.LIARA_TOKEN }}
+        run: |
+          npx --yes @liara/cli@latest deploy \
+            --api-token "$LIARA_TOKEN" \
+            --app "${{ inputs.app }}" \
+            --image "$IMAGE" \
+            --detach
+
+      # --- مسیر ۲: بیلد روی خود لیارا ---------------------------------------
+      #
+      # build-location پیش‌فرض «germany» است چون بخش بزرگ بیلد، دانلود از
+      # PyPI و npm و داکرهاب است و از زیرساخت آلمان بسیار سریع‌تر انجام
+      # می‌شود. اگر الزام دارید بیلد داخل ایران بماند، iran را انتخاب کنید و
+      # احتمال برخورد با مهلت زمانی را بپذیرید.
+      - name: Deploy
+        if: ${{ !inputs.prebuilt }}
+        env:
+          LIARA_TOKEN: ${{ secrets.LIARA_TOKEN }}
+        run: |
           npx --yes @liara/cli@latest deploy \
             --api-token "$LIARA_TOKEN" \
             --app "${{ inputs.app }}" \
             --platform docker \
+            --build-location "${{ inputs.build_location }}" \
             --detach
