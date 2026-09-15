@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import time
+from typing import Any
 
 from dotenv import load_dotenv
 from livekit.agents import (
@@ -20,7 +21,7 @@ from livekit.plugins import bey, openai
 import storage
 from audio import build_noise_cancellation
 from prompts import GREETING_INSTRUCTIONS, compose_instructions
-from tools import send_email, unblock_user
+from tools import send_email, send_sms, unblock_user
 
 # بارگذاری کلیدها از .env.local
 load_dotenv(".env.local")
@@ -32,11 +33,24 @@ DEFAULT_SESSION_SECONDS = 300
 
 
 class Assistant(Agent):
-    def __init__(self, instructions: str) -> None:
-        super().__init__(
-            instructions=instructions,
-            tools=[unblock_user, send_email],
-        )
+    def __init__(self, instructions: str, tools: list[Any]) -> None:
+        super().__init__(instructions=instructions, tools=tools)
+
+
+def _available_tools() -> list[Any]:
+    """
+    ابزارهایی که در این نشست در اختیار مدل گذاشته می‌شوند.
+
+    ⚠️ ابزار خاموش **ساخته نمی‌شود**، نه اینکه ساخته شود و خطا بدهد. اگر
+    ابزاری وجود داشته باشد، مدل دیر یا زود به کاربر وعده‌اش را می‌دهد —
+    «الان برایتان پیامک می‌کنم» — و بعد نمی‌تواند انجامش دهد.
+    """
+    tools: list[Any] = [unblock_user, send_email]
+
+    if storage.sms_enabled():
+        tools.append(send_sms)
+
+    return tools
 
 
 server = AgentServer()
@@ -61,11 +75,17 @@ async def ostandari_support(ctx: JobContext) -> None:
     )
 
     restrictions = [(r.topic, r.response) for r in storage.get_restrictions()]
-    instructions = compose_instructions(restrictions, session_seconds)
+    tools = _available_tools()
+    instructions = compose_instructions(
+        restrictions,
+        session_seconds,
+        sms_enabled=storage.sms_enabled(),
+    )
     logger.info(
-        "نشست با %s ثانیه مهلت و %s محدودیت موضوعی شروع می‌شود",
+        "نشست با %s ثانیه مهلت، %s محدودیت موضوعی و ابزارهای %s شروع می‌شود",
         session_seconds,
         len(restrictions),
+        [getattr(t, "__name__", str(t)) for t in tools],
     )
 
     # کلیدها: پایگاه داده (رمزگشایی‌شده) → متغیر محیطی. اگر پنل کلیدی نداشته
@@ -112,7 +132,7 @@ async def ostandari_support(ctx: JobContext) -> None:
         session.on("conversation_item_added", on_item_added)
 
     await session.start(
-        agent=Assistant(instructions),
+        agent=Assistant(instructions, tools),
         room=ctx.room,
         room_options=room_io.RoomOptions(
             audio_input=room_io.AudioInputOptions(

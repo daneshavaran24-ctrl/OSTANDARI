@@ -11,7 +11,7 @@ import { DEFAULT_SESSION_SECONDS } from './session-defaults';
  * اینکه یک دیتابیس خالی بسازد و ادمین فکر کند چیزی کار می‌کند.
  */
 
-export const EXPECTED_SCHEMA_VERSION = 2;
+export const EXPECTED_SCHEMA_VERSION = 3;
 
 export class DatabaseUnavailableError extends Error {
   constructor() {
@@ -102,6 +102,19 @@ export function listSecrets(): SecretInfo[] {
     updated_at: string;
   }[];
   return rows.map((r) => ({ name: r.name, last4: r.last4, updatedAt: r.updated_at }));
+}
+
+/**
+ * متن رمزشده‌ی یک کلید، برای وقتی که خود سرور باید از آن استفاده کند.
+ *
+ * 🔴 خروجی این تابع هرگز نباید در پاسخ HTTP قرار بگیرد. تنها مصرفش «آزمایش
+ * اتصال» است: سرور کلید ذخیره‌شده را رمزگشایی می‌کند و خودش به سرویس می‌زند.
+ */
+export function getSecretCiphertext(name: string): string | null {
+  const row = db().prepare('SELECT ciphertext FROM secrets WHERE name = ?').get(name) as
+    | { ciphertext: string }
+    | undefined;
+  return row?.ciphertext ?? null;
 }
 
 export function saveSecret(name: string, ciphertext: string, last4: string): void {

@@ -99,6 +99,7 @@ GREETING_INSTRUCTIONS = """
 def compose_instructions(
     restrictions: list[tuple[str, str]] | None = None,
     session_seconds: int | None = None,
+    sms_enabled: bool = False,
 ) -> str:
     """
     دستورهای نهایی را می‌سازد: پایه + محدودیت‌های موضوعی + قید زمان.
@@ -107,6 +108,17 @@ def compose_instructions(
     مصر ممکن است مدل را دور بزند. جزئیات در SECURITY.md.
     """
     parts = [AGENT_INSTRUCTIONS]
+
+    # امکان پیامک فقط وقتی گفته می‌شود که ابزارش واقعاً در اختیار مدل باشد.
+    # وعده‌ی کاری که انجام نمی‌شود، از نداشتن آن امکان بدتر است.
+    if sms_enabled:
+        parts.append(
+            "\n# ارسال پیامک\n\n"
+            "اگر کاربر خواست چیزی برایش پیامک شود، شماره‌ی موبایلش را بپرس و "
+            "با ابزار send_sms بفرست. پیش از ارسال، شماره و متن برای تأیید به "
+            "او نشان داده می‌شود؛ تا تأیید نکند چیزی فرستاده نمی‌شود. "
+            "متن پیامک را کوتاه و روشن بنویس."
+        )
 
     if restrictions:
         lines = ["\n# موضوع‌هایی که نباید درباره‌شان صحبت کنی\n"]

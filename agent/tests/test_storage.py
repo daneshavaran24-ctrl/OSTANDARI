@@ -289,7 +289,7 @@ def test_migration_script_is_idempotent(tmp_path):
     conn.close()
 
     assert count == 2, f"محدودیت‌های نمونه نباید تکرار شوند، ولی {count} تا هست"
-    assert version == 2
+    assert version == 3
 
 
 if sys.platform == "win32":  # pragma: no cover

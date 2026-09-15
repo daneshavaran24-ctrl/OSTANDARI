@@ -18,9 +18,15 @@ from collections import defaultdict
 
 DEFAULT_EMAIL_MAX_PER_SESSION = 3
 DEFAULT_UNBLOCK_MAX_PER_SESSION = 5
+DEFAULT_SMS_MAX_PER_SESSION = 3
 
 MAX_SUBJECT_LENGTH = 200
 MAX_MESSAGE_LENGTH = 10_000
+
+# یک پیامک فارسی بیش از ۷۰ کاراکتر به چند بخش تقسیم می‌شود و هر بخش جدا
+# حساب می‌شود. این سقف جلوی یک مدل پرحرف را می‌گیرد که ناخواسته ده بخش
+# می‌فرستد و هزینه می‌سازد.
+MAX_SMS_LENGTH = 600
 
 # شمارنده‌ی استفاده به ازای هر اتاق. فرایند ایجنت برای هر اتاق زنده است، پس
 # نگه داشتن در حافظه کافی است و نیازی به ذخیره‌ساز بیرونی ندارد.
@@ -36,6 +42,17 @@ _EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
 
 # کاراکترهایی که اجازه‌ی تزریق سرتیتر در ایمیل را می‌دهند
 _HEADER_INJECTION_RE = re.compile(r"[\r\n]")
+
+# ---------------------------------------------------------------------------
+# اعتبارسنجی شماره‌ی موبایل ایران
+# ---------------------------------------------------------------------------
+
+# ارقام فارسی و عربی، چون کاربر شماره را شفاهی می‌گوید و مدل ممکن است با هر
+# کدام بنویسدش.
+_PERSIAN_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+
+# قالب استاندارد پس از نرمال‌سازی: 09 و نه رقم دیگر.
+_MOBILE_RE = re.compile(r"^09\d{9}$")
 
 
 class GuardError(ValueError):
@@ -132,6 +149,7 @@ def check_and_count(action: str, session_id: str) -> None:
         "unblock_user": _limit(
             "UNBLOCK_MAX_PER_SESSION", DEFAULT_UNBLOCK_MAX_PER_SESSION
         ),
+        "send_sms": _limit("SMS_MAX_PER_SESSION", DEFAULT_SMS_MAX_PER_SESSION),
     }
     if action not in limits:
         raise GuardError(f"عمل ناشناخته برای شمارش: {action!r}")
@@ -174,3 +192,60 @@ def normalize_username(username: str) -> str:
 
     cleaned = username.strip().replace("/", "\\")
     return cleaned.rsplit("\\", 1)[-1].strip().lower()
+
+
+# ---------------------------------------------------------------------------
+# شماره‌ی موبایل
+# ---------------------------------------------------------------------------
+
+
+def normalize_mobile(raw: str) -> str:
+    """
+    شماره‌ی موبایل ایران را به قالب `09xxxxxxxxx` درمی‌آورد.
+
+    کاربر شماره را **شفاهی** می‌گوید و مدل آن را می‌نویسد، پس ورودی می‌تواند
+    ارقام فارسی داشته باشد، با `+98` یا `0098` یا `98` شروع شود، یا بین ارقام
+    فاصله و خط تیره داشته باشد. همه‌ی این‌ها پذیرفته می‌شوند.
+
+    🔴 چیزی که پذیرفته **نمی‌شود** هر شکل مبهم دیگری است. یک شماره‌ی اشتباه
+    یعنی پیامک به یک غریبه، و آن را نمی‌شود پس گرفت.
+    """
+    if not isinstance(raw, str):
+        raise GuardError("شماره‌ی موبایل باید متن باشد.")
+
+    value = raw.translate(_PERSIAN_DIGITS)
+    # فاصله، خط تیره، پرانتز و نقطه — چیزهایی که مدل برای خوانایی می‌گذارد
+    value = re.sub(r"[\s\-()._]", "", value)
+
+    if not value:
+        raise GuardError("شماره‌ی موبایل خالی است.")
+
+    if value.startswith("+98"):
+        value = "0" + value[3:]
+    elif value.startswith("0098"):
+        value = "0" + value[4:]
+    elif value.startswith("98") and len(value) == 12:
+        value = "0" + value[2:]
+    elif value.startswith("9") and len(value) == 10:
+        value = "0" + value
+
+    if not _MOBILE_RE.match(value):
+        raise GuardError(
+            f"شماره‌ی موبایل معتبر نیست: {raw!r}. قالب درست ۰۹ و نه رقم دیگر است."
+        )
+
+    return value
+
+
+def validate_sms_text(message: str) -> str:
+    """متن پیامک را بررسی می‌کند و شکل تمیزشده‌اش را برمی‌گرداند."""
+    if not isinstance(message, str) or not message.strip():
+        raise GuardError("متن پیامک خالی است.")
+
+    text = message.strip()
+    if len(text) > MAX_SMS_LENGTH:
+        raise GuardError(
+            f"متن پیامک نباید از {MAX_SMS_LENGTH} کاراکتر بیشتر باشد "
+            f"(الان {len(text)} کاراکتر است)."
+        )
+    return text

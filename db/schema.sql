@@ -97,3 +97,30 @@ CREATE INDEX IF NOT EXISTS idx_rpc_events_conversation
 
 CREATE INDEX IF NOT EXISTS idx_rpc_events_created
   ON rpc_events (created_at DESC);
+
+-- ---------------------------------------------------------------------------
+-- نسخه‌ی ۳ — رخدادهای پیامک
+-- ---------------------------------------------------------------------------
+
+-- هر تلاش ارسال پیامک، موفق یا ناموفق.
+--
+-- client_reference_id شناسه‌ی یکتایی است که به قاصدک هم فرستاده می‌شود. یکتا
+-- بودنش در همین جدول تضمین می‌کند که یک retry دو پیامک نفرستد: پیش از ارسال،
+-- ردیف با همین شناسه درج می‌شود و اگر از قبل باشد، ارسال دوباره انجام نمی‌شود.
+CREATE TABLE IF NOT EXISTS sms_events (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  conversation_id     INTEGER REFERENCES conversations (id) ON DELETE CASCADE,
+  client_reference_id TEXT NOT NULL UNIQUE,
+  recipient           TEXT NOT NULL,
+  provider            TEXT NOT NULL DEFAULT 'ghasedak',
+  status              TEXT NOT NULL,
+  message_id          TEXT,
+  error               TEXT,
+  created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_sms_events_created
+  ON sms_events (created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_sms_events_conversation
+  ON sms_events (conversation_id, id);

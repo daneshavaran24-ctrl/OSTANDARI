@@ -25,7 +25,7 @@ logger = logging.getLogger("agent")
 
 # نسخه‌ای که این کد انتظارش را دارد. اگر دیتابیس جلوتر باشد یعنی پنل ارتقا
 # یافته ولی ایجنت نه — به‌جای خرابی خاموش، هشدار روشن می‌دهیم.
-EXPECTED_SCHEMA_VERSION = 2
+EXPECTED_SCHEMA_VERSION = 3
 
 DEFAULT_DB_PATH = Path(__file__).parents[2] / "data" / "ostandari.db"
 
@@ -335,3 +335,81 @@ def record_rpc_event(
             )
     except sqlite3.Error as e:
         logger.warning("ثبت رخداد RPC ناموفق بود: %s", e)
+
+
+# ---------------------------------------------------------------------------
+# پیامک
+# ---------------------------------------------------------------------------
+
+
+def sms_enabled() -> bool:
+    """
+    آیا ابزار پیامک در اختیار مدل گذاشته شود؟
+
+    خاموش بودن یعنی ابزار اصلاً ساخته نمی‌شود، نه اینکه ساخته شود و خطا بدهد.
+    اگر ابزاری وجود داشته باشد، مدل دیر یا زود به کاربر وعده‌اش را می‌دهد.
+    """
+    return get_setting("sms_enabled", "SMS_ENABLED", default="0") in ("1", "true", "on")
+
+
+def claim_sms(
+    conversation_id: int | None,
+    client_reference_id: str,
+    recipient: str,
+) -> bool:
+    """
+    پیش از ارسال، شناسه‌ی یکتا را رزرو می‌کند.
+
+    اگر ردیفی با همین شناسه از قبل باشد، `False` برمی‌گرداند و ارسال نباید
+    انجام شود. این تنها چیزی است که جلوی «یک retry، دو پیامک» را می‌گیرد؛
+    پیامکِ رفته را نمی‌شود پس گرفت.
+
+    اگر پایگاه داده در دسترس نباشد `True` برمی‌گرداند: نبود دیتابیس نباید
+    ارسال را ببندد، ولی در آن حالت تضمین یک‌بار-ارسال هم وجود ندارد و همین
+    در لاگ هشدار داده می‌شود.
+    """
+    try:
+        with _connect() as conn:
+            if conn is None:
+                logger.warning(
+                    "پایگاه داده در دسترس نیست؛ تضمین یک‌بار-ارسال پیامک برقرار نیست"
+                )
+                return True
+            conn.execute(
+                "INSERT INTO sms_events "
+                "(conversation_id, client_reference_id, recipient, status) "
+                "VALUES (?, ?, ?, 'pending')",
+                (conversation_id, client_reference_id, recipient),
+            )
+            return True
+    except sqlite3.IntegrityError:
+        logger.warning("پیامک با شناسه‌ی %s قبلاً ثبت شده است", client_reference_id)
+        return False
+    except sqlite3.Error as e:
+        logger.warning("رزرو شناسه‌ی پیامک ناموفق بود: %s", e)
+        return True
+
+
+def finish_sms(
+    client_reference_id: str,
+    status: str,
+    message_id: str | None = None,
+    error: str | None = None,
+) -> None:
+    """نتیجه‌ی نهایی یک ارسال را روی همان ردیف رزروشده می‌نشاند."""
+    try:
+        with _connect() as conn:
+            if conn is None:
+                return
+            conn.execute(
+                "UPDATE sms_events SET status = ?, message_id = ?, error = ? "
+                "WHERE client_reference_id = ?",
+                (
+                    status,
+                    message_id,
+                    error[:500] if error else None,
+                    client_reference_id,
+                ),
+            )
+    except sqlite3.Error as e:
+        logger.warning("ثبت نتیجه‌ی پیامک ناموفق بود: %s", e)

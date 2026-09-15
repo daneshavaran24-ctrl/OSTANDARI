@@ -1,6 +1,7 @@
 import logging
 import os
 import smtplib
+import uuid
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
@@ -8,13 +9,17 @@ from pathlib import Path
 from livekit.agents import RunContext, ToolError, function_tool, get_job_context
 
 import rpc
+import sms
+import storage
 from guards import (
     GuardError,
     allowed_email_domains,
     check_and_count,
+    normalize_mobile,
     normalize_username,
     validate_email_address,
     validate_email_content,
+    validate_sms_text,
 )
 
 logger = logging.getLogger(__name__)
@@ -170,3 +175,68 @@ async def send_email(
     if shown:
         return f"ایمیل به {to_email} ارسال شد و اعلان روی صفحه نمایش داده شد."
     return f"ایمیل به {to_email} ارسال شد، ولی نمایش اعلان روی صفحه ناموفق بود."
+
+
+@function_tool()
+async def send_sms(context: RunContext[None], mobile: str, message: str) -> str:
+    """
+    ارسال پیامک به شماره‌ی موبایلی که کاربر می‌گوید.
+
+    پیش از ارسال، شماره و متن برای تأیید به کاربر نشان داده می‌شود. اگر کاربر
+    تأیید نکند، هیچ پیامکی فرستاده نمی‌شود.
+    """
+    try:
+        target = normalize_mobile(mobile)
+        text = validate_sms_text(message)
+        check_and_count("send_sms", _session_id())
+    except GuardError as e:
+        logger.warning("درخواست send_sms رد شد: %s", e)
+        return str(e)
+
+    api_key = storage.get_secret("sms_api_key", "GHASEDAK_API_KEY")
+    line_number = storage.get_setting("sms_line_number", "GHASEDAK_LINE_NUMBER", "")
+
+    if not api_key or not line_number:
+        logger.error("پیامک پیکربندی نشده است (کلید یا شماره‌ی خط)")
+        return (
+            "ارسال پیامک در حال حاضر پیکربندی نشده است. به کاربر بگو این امکان "
+            "فعلاً در دسترس نیست و راه دیگری پیشنهاد بده."
+        )
+
+    # 🔴 تأیید صریح، چون پیامکِ رفته را نمی‌شود پس گرفت. سکوت، قطع اتصال یا
+    # بستن تب همه «نه» شمرده می‌شوند.
+    confirmed = await rpc.confirm(
+        "ارسال پیامک",
+        f"پیامک به شماره‌ی {target} فرستاده شود؟\n\n{text}",
+        confirm_label="بله، بفرست",
+    )
+    if not confirmed:
+        logger.info("کاربر ارسال پیامک را تأیید نکرد")
+        return "کاربر ارسال پیامک را تأیید نکرد. پیامکی فرستاده نشد."
+
+    reference = uuid.uuid4().hex
+    if not storage.claim_sms(None, reference, target):
+        return "این پیامک قبلاً ثبت شده است و دوباره فرستاده نمی‌شود."
+
+    try:
+        result = await sms.send_single(
+            api_key=api_key,
+            line_number=line_number,
+            receptor=target,
+            message=text,
+            client_reference_id=reference,
+        )
+    except sms.SmsError as e:
+        # متن خطای سرویس به کاربر نمی‌رسد؛ فقط در لاگ می‌ماند.
+        logger.error("ارسال پیامک به %s ناموفق بود: %s", target, e)
+        storage.finish_sms(reference, "failed", error=str(e))
+        return (
+            "ارسال پیامک ناموفق بود. به کاربر بگو مشکلی پیش آمده و بعداً "
+            "دوباره تلاش کند."
+        )
+
+    storage.finish_sms(reference, "sent", message_id=result.message_id)
+    logger.info("پیامک به %s ارسال شد (شناسه: %s)", target, result.message_id)
+
+    await rpc.notify(f"پیامک به شماره‌ی {target} ارسال شد.")
+    return f"پیامک با موفقیت به {target} ارسال شد."

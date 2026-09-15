@@ -12,7 +12,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 // node:sqlite از Node 22.5 اضافه شده است. بدون این بررسی، نسخه‌های قدیمی‌تر
 // خطای مبهم ERR_UNKNOWN_BUILTIN_MODULE می‌دهند که ربطش به نسخه‌ی Node معلوم
