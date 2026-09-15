@@ -7,6 +7,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # اجرای دستی روی هر شاخه. بدون این، تا وقتی `main` ساخته نشود هیچ‌کدام از
+  # این تست‌ها — از جمله ساخت ایمیج استقرار — حتی یک بار هم اجرا نمی‌شوند.
+  workflow_dispatch:
 
 jobs:
   frontend:
