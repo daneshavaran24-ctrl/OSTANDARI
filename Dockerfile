@@ -84,11 +84,14 @@ RUN if [ "$DOWNLOAD_MODELS" = "1" ]; then \
 # دبیان bookworm نسخه‌ی ۲۲ ندارد و `node:sqlite` از ۲۲.۵ آمده است.
 FROM ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-bookworm-slim AS runtime
 
-# ⚠️ اعلام دوباره لازم است: ARGهای پیش از اولین FROM داخل هیچ مرحله‌ای در
-# دسترس نیستند. بدون این خط، تگ زیر به `node:-bookworm-slim` بسط می‌یابد.
-ARG NODE_VERSION
-
-COPY --from=node:${NODE_VERSION}-bookworm-slim /usr/local/bin/node /usr/local/bin/node
+# ⚠️ از نام مرحله کپی می‌شود، نه از تگ ایمیج. بیلدر کلاسیک — همان که لیارا
+# دارد — متغیر را در `COPY --from` **اصلاً بسط نمی‌دهد** و بیلد با
+# `invalid reference format` می‌شکند. این ویژگی فقط در BuildKit هست.
+#
+# مرحله‌ی frontend-build خودش `node:${NODE_VERSION}-bookworm-slim` است، پس
+# نسخه یک منبع حقیقت دارد و همان Nodeای که فرانت‌اند را ساخته در رانتایم هم
+# اجرا می‌شود.
+COPY --from=frontend-build /usr/local/bin/node /usr/local/bin/node
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates libstdc++6 \

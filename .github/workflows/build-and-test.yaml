@@ -20,7 +20,12 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
+      # ⚠️ package.json ریشه با npm کار می‌کند و `packageManager` ندارد؛ این
+      # اکشن هم ریشه را می‌خواند، نه working-directory جاب. بدون این ورودی
+      # با «No pnpm version is specified» می‌شکند.
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
@@ -160,7 +165,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # ⚠️ package.json ریشه با npm کار می‌کند و `packageManager` ندارد؛ این
+      # اکشن هم ریشه را می‌خواند، نه working-directory جاب. بدون این ورودی
+      # با «No pnpm version is specified» می‌شکند.
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
@@ -201,7 +211,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # ⚠️ package.json ریشه با npm کار می‌کند و `packageManager` ندارد؛ این
+      # اکشن هم ریشه را می‌خواند، نه working-directory جاب. بدون این ورودی
+      # با «No pnpm version is specified» می‌شکند.
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
@@ -282,7 +297,12 @@ jobs:
         with:
           fetch-depth: 0 # اسکن کلید به کل تاریخچه نیاز دارد
 
+      # ⚠️ package.json ریشه با npm کار می‌کند و `packageManager` ندارد؛ این
+      # اکشن هم ریشه را می‌خواند، نه working-directory جاب. بدون این ورودی
+      # با «No pnpm version is specified» می‌شکند.
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
