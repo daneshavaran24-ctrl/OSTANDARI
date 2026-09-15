@@ -2,7 +2,7 @@ import { type Page, expect, test } from '@playwright/test';
 import { execFile } from 'node:child_process';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
-import { APP, livekit } from './fixtures';
+import { APP, agentEnvironment } from './fixtures';
 
 const run = promisify(execFile);
 const AGENT_DIR = resolve(__dirname, '..', '..', 'agent');
@@ -36,12 +36,12 @@ type ProbeResult = {
 async function probe(scenario: string, timeout = 60_000): Promise<ProbeResult> {
   const options = {
     cwd: AGENT_DIR,
-    env: {
-      ...process.env,
-      LIVEKIT_URL: livekit.url,
-      LIVEKIT_API_KEY: livekit.apiKey,
-      LIVEKIT_API_SECRET: livekit.apiSecret,
-    },
+    // ⚠️ حتماً agentEnvironment و نه process.env خام: وقتی سرور LiveKit محلی
+    // است، متغیرهای پروکسی باید پاک شوند. `livekit` مقدار HTTPS_PROXY را برای
+    // همه‌ی اتصال‌ها به کار می‌برد و NO_PROXY را نادیده می‌گیرد، پس اتصال به
+    // 127.0.0.1 هم از پروکسی رد می‌شود و شکست می‌خورد. همین تابع دقیقاً برای
+    // این تله ساخته شده بود و اینجا استفاده نشده بود.
+    env: agentEnvironment(),
     timeout,
   };
   const args = ['run', 'python', 'tests/live/rpc_probe.py', '--scenario', scenario];

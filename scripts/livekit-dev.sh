@@ -24,14 +24,55 @@ CONFIG="port: ${PORT}
 agents:
   target_load: 1.0"
 
-ARGS=(--dev --bind 0.0.0.0 --node-ip 127.0.0.1 --config-body "$CONFIG")
+BASE_ARGS=(--dev --bind 0.0.0.0 --node-ip 127.0.0.1)
+ARGS=("${BASE_ARGS[@]}" --config-body "$CONFIG")
+
+# ⚠️ نام فیلدهای بخش `agents` بین نسخه‌های سرور عوض شده است و سرور در برابر
+# فیلد ناشناس **بالا نمی‌آید**، نه اینکه نادیده‌اش بگیرد. اندازه‌گیری شد:
+#
+#   ۱٫۹٫۱  → field agents not found in type config.Config
+#   ۱٫۱۰٫۰ → field target_load not found in type agent.Config
+#
+# پس پیکربندی یک بار امتحان می‌شود و اگر سرور نپذیرفتش، بدون آن اجرا می‌شود.
+# بدیلِ این کار، اسکریپتی است که فقط روی یک نسخه‌ی خاص کار می‌کند و روی بقیه
+# با پیامی که ربطی به تست ندارد می‌میرد.
+start() {
+  local binary="$1"
+  shift
+  local log
+  log="$(mktemp)"
+
+  "$binary" "$@" --config-body "$CONFIG" > "$log" 2>&1 &
+  local pid=$!
+
+  # فرصت کوتاه: خطای تجزیه‌ی پیکربندی بی‌درنگ رخ می‌دهد، نه بعد از بالا آمدن.
+  sleep 2
+
+  if kill -0 "$pid" 2> /dev/null; then
+    cat "$log"
+    rm -f "$log"
+    wait "$pid"
+    return
+  fi
+
+  if grep -q "could not parse config" "$log"; then
+    echo "هشدار: این نسخه‌ی سرور پیکربندی agents را نمی‌شناسد؛ بدون آن اجرا می‌شود." >&2
+  else
+    cat "$log" >&2
+  fi
+  rm -f "$log"
+
+  exec "$binary" "$@"
+}
 
 if [ -n "${LIVEKIT_SERVER_BIN:-}" ]; then
-  exec "$LIVEKIT_SERVER_BIN" "${ARGS[@]}"
+  start "$LIVEKIT_SERVER_BIN" "${BASE_ARGS[@]}"
+  exit $?
 fi
 
 if command -v livekit-server > /dev/null 2>&1; then
-  exec livekit-server "${ARGS[@]}"
+  start livekit-server "${BASE_ARGS[@]}"
+  exit $?
 fi
 
 if command -v docker > /dev/null 2>&1 && docker info > /dev/null 2>&1; then
