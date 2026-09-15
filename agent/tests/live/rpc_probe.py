@@ -45,6 +45,27 @@ def _out(payload: dict[str, object]) -> None:
     sys.stdout.flush()
 
 
+def _cause_chain(error: BaseException) -> str:
+    """
+    زنجیره‌ی کامل علت، نه فقط پیام بیرونی.
+
+    ⚠️ `rpc.py` عمداً جزئیات را پنهان می‌کند و فقط «<متد> ناموفق بود» می‌دهد —
+    که برای کاربر درست است ولی برای عیب‌یابی بی‌فایده. علت واقعی در `__cause__`
+    می‌ماند و بدون این تابع فقط در stderr دیده می‌شد، جایی که تست نشانش نمی‌دهد.
+    یک بار تمام یک جلسه‌ی عیب‌یابی صرف نبودِ همین یک خط شد.
+    """
+    parts: list[str] = []
+    seen: set[int] = set()
+    current: BaseException | None = error
+
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        parts.append(f"{type(current).__name__}: {current}")
+        current = current.__cause__ or current.__context__
+
+    return " ← ".join(parts)
+
+
 async def _find_room(explicit: str | None) -> str:
     """
     نام اتاقی که مرورگر در آن است.
@@ -201,7 +222,13 @@ async def main() -> int:
         _out({"ok": True, "room": room_name, **payload})
         return 0
     except Exception as e:
-        _out({"ok": False, "error": str(e), "type": type(e).__name__})
+        _out(
+            {
+                "ok": False,
+                "error": _cause_chain(e),
+                "type": type(e).__name__,
+            }
+        )
         return 1
     finally:
         if room is not None:
