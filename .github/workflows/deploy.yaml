@@ -1,26 +1,29 @@
 name: Deploy to Liara
 
-# اولین اجرا عمداً دستی است. استقرار خودکار با هر push تا وقتی روشن شود که
-# اپ، دیسک و متغیرها در پنل لیارا آماده‌اند، بیشتر ضرر دارد تا سود.
+# ⚠️ بیلد روی خود لیارا برای این پروژه جواب نمی‌دهد و عمداً حذف شده است.
+#
+# اندازه‌گیری از لاگ واقعی: پس از ۱ دقیقه و ۴۱ ثانیه تازه `pnpm install` تمام
+# شده بود — حدود ۲۰٪ کار. باقی‌مانده (بیلد Next، بیش از ۵۵۰ مگابایت وابستگی
+# پایتون، و کپی حدود ۱٫۳ گیگابایت) بیلد را به ۷ تا ۱۰ دقیقه می‌رساند و از
+# مهلت بیلد لیارا رد می‌شود. کش لیارا هم پایدار نماند: در تلاش دوم فقط دو گام
+# اول کش شدند و `pnpm install` دوباره هر ۴۸۷ بسته را از صفر گرفت.
+#
+# پس ایمیج اینجا ساخته و به یک رجیستری فرستاده می‌شود و لیارا فقط آن را
+# می‌کشد. کشیدن یک ایمیج، موازی و CDN-دار است؛ دانلود سریالی wheel و npm نیست.
 on:
   workflow_dispatch:
     inputs:
       app:
         description: نام اپ در لیارا
         required: true
-      build_location:
-        description: بیلد کجا انجام شود
+      registry:
+        description: ایمیج کجا منتشر شود
         type: choice
-        options: [germany, iran]
-        default: germany
-      prebuilt:
-        description: ایمیج را همین‌جا بساز و فقط همان را مستقر کن (بیلد لیارا اصلاً اجرا نمی‌شود)
-        type: boolean
-        default: false
+        options: [ghcr, dockerhub]
+        default: ghcr
 
 permissions:
   contents: read
-  # برای فرستادن ایمیج به GHCR در حالت prebuilt
   packages: write
 
 concurrency:
@@ -35,22 +38,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # همان ایمیجی که مستقر می‌شود، اول اینجا ساخته می‌شود. اگر Dockerfile
-      # خراب باشد، اینجا معلوم می‌شود نه وسط استقرار.
-      #
-      # DOCKER_BUILDKIT=0 چون لیارا هم بیلدر کلاسیک دارد. با BuildKit این
-      # گام سبز می‌شود و استقرار بعدش می‌شکند — که بی‌فایده‌ترین حالت است.
-      - name: Build the image with the classic builder
+      # DOCKER_BUILDKIT=0 چون لیارا بیلدر کلاسیک دارد. ایمیج باید با همان
+      # بیلدری ساخته شود که آنجا هم ساخته می‌شد، وگرنه تفاوت‌ها پنهان می‌مانند.
+      - name: Build the image
         env:
           DOCKER_BUILDKIT: 0
         run: docker build -t ostandari:ci .
 
-      - name: Use Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Check the token
+      - name: Check the Liara token
         env:
           LIARA_TOKEN: ${{ secrets.LIARA_TOKEN }}
         run: |
@@ -59,24 +54,76 @@ jobs:
             exit 1
           fi
 
-      # --- مسیر ۱: ایمیج از پیش ساخته‌شده -----------------------------------
-      #
-      # بیلد لیارا مهلت زمانی دارد و این ایمیج بزرگ است. اینجا هیچ مهلتی نیست،
-      # پس ایمیج ساخته و به GHCR فرستاده می‌شود و لیارا فقط آن را می‌کشد.
-      #
-      # ⚠️ بسته‌ی GHCR باید **عمومی** باشد، وگرنه لیارا نمی‌تواند بکشدش. بار
-      # اول در GitHub → Packages → ostandari → Package settings آن را عمومی کنید.
-      - name: Push the image to GHCR
-        if: ${{ inputs.prebuilt }}
+      - name: Sign in to GHCR
+        if: ${{ inputs.registry == 'ghcr' }}
         run: |
-          image="ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_SHA::12}"
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_SHA::12}" >> "$GITHUB_ENV"
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          docker tag ostandari:ci "$image"
-          docker push "$image"
-          echo "IMAGE=$image" >> "$GITHUB_ENV"
 
-      - name: Deploy the prebuilt image
-        if: ${{ inputs.prebuilt }}
+      - name: Sign in to Docker Hub
+        if: ${{ inputs.registry == 'dockerhub' }}
+        env:
+          USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -z "$USERNAME" ] || [ -z "$TOKEN" ]; then
+            echo "::error::DOCKERHUB_USERNAME و DOCKERHUB_TOKEN را در Secrets بگذارید."
+            exit 1
+          fi
+          echo "IMAGE=docker.io/$USERNAME/ostandari:${GITHUB_SHA::12}" >> "$GITHUB_ENV"
+          echo "$TOKEN" | docker login docker.io -u "$USERNAME" --password-stdin
+
+      - name: Push
+        run: |
+          docker tag ostandari:ci "$IMAGE"
+          docker push "$IMAGE"
+
+      # لیارا ایمیج را **بدون اعتبارنامه** می‌کشد. اگر مخزن رجیستری خصوصی
+      # باشد، استقرار با خطایی مبهم شکست می‌خورد.
+      #
+      # ⚠️ این گام عمداً **استقرار را متوقف نمی‌کند**. بررسی دسترسی ناشناس به
+      # شبکه وابسته است و یک مثبت کاذب، استقرار سالم را می‌خواباند — که از
+      # مشکلی که قرار بود بگیرد بدتر است. پس فقط هشدار می‌دهد و اگر لیارا
+      # واقعاً نتوانست ایمیج را بکشد، راه‌حل همین‌جا در لاگ نوشته است.
+      - name: Check that the image can be pulled anonymously
+        continue-on-error: true
+        run: |
+          docker logout ghcr.io > /dev/null 2>&1 || true
+          docker logout docker.io > /dev/null 2>&1 || true
+          docker logout > /dev/null 2>&1 || true
+
+          if docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
+            echo "✓ ایمیج به‌صورت عمومی قابل کشیدن است: $IMAGE"
+            exit 0
+          fi
+
+          echo "::warning::دسترسی ناشناس به ایمیج تأیید نشد: $IMAGE"
+          echo "استقرار ادامه می‌یابد. اگر لیارا نتوانست ایمیج را بکشد، علتش این است:"
+          if [ "${{ inputs.registry }}" = "ghcr" ]; then
+            cat <<'MESSAGE'
+
+          بسته‌های GHCR بار اول خصوصی ساخته می‌شوند. یک بار این کار را بکنید:
+
+            GitHub → صفحه‌ی مخزن → Packages → ostandari
+              → Package settings → Change visibility → Public
+
+          MESSAGE
+          else
+            cat <<'MESSAGE'
+
+          مخزن داکرهاب را عمومی کنید:
+
+            hub.docker.com → Repositories → ostandari → Settings → Make public
+
+          MESSAGE
+          fi
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Deploy
         env:
           LIARA_TOKEN: ${{ secrets.LIARA_TOKEN }}
         run: |
@@ -84,22 +131,4 @@ jobs:
             --api-token "$LIARA_TOKEN" \
             --app "${{ inputs.app }}" \
             --image "$IMAGE" \
-            --detach
-
-      # --- مسیر ۲: بیلد روی خود لیارا ---------------------------------------
-      #
-      # build-location پیش‌فرض «germany» است چون بخش بزرگ بیلد، دانلود از
-      # PyPI و npm و داکرهاب است و از زیرساخت آلمان بسیار سریع‌تر انجام
-      # می‌شود. اگر الزام دارید بیلد داخل ایران بماند، iran را انتخاب کنید و
-      # احتمال برخورد با مهلت زمانی را بپذیرید.
-      - name: Deploy
-        if: ${{ !inputs.prebuilt }}
-        env:
-          LIARA_TOKEN: ${{ secrets.LIARA_TOKEN }}
-        run: |
-          npx --yes @liara/cli@latest deploy \
-            --api-token "$LIARA_TOKEN" \
-            --app "${{ inputs.app }}" \
-            --platform docker \
-            --build-location "${{ inputs.build_location }}" \
             --detach
