@@ -35,7 +35,7 @@ jobs:
       BEY_AVATAR_ID: ${{ secrets.BEY_AVATAR_ID }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # بدون کلید، شبیه‌سازی به‌جای شکست با خطای مبهم، تمیز رد می‌شود
       - name: Check required secrets

@@ -43,7 +43,7 @@ jobs:
     name: استقرار
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # رویداد push هیچ ورودی‌ای ندارد، پس مقدارها از متغیرهای مخزن می‌آیند و
       # ورودی دستی فقط آن‌ها را موقتاً کنار می‌زند. اگر نام اپ هیچ‌جا نباشد،
