@@ -12,6 +12,8 @@ const ALLOWED = new Set([
   'noise_cancellation',
   'record_transcripts',
   'transcript_retention_days',
+  'sms_enabled',
+  'sms_line_number',
 ]);
 
 export async function GET() {

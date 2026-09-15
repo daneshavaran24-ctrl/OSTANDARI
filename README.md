@@ -35,7 +35,7 @@
 | پوشه | چیست |
 |---|---|
 | `frontend/` | رابط کاربری گفت‌وگو (Next.js 15، React 19). توکن‌سرور LiveKit را هم خودش دارد. |
-| `agent/` | ایجنت صوتی (`livekit-agents` ۱.۸ + مدل `gpt-realtime` + آواتار Beyond Presence + نویزگیری ai-coustics) و دو ابزار `unblock_user` و `send_email`. چیدمانش از قالب رسمی [`agent-starter-python`](https://github.com/livekit-examples/agent-starter-python) پیروی می‌کند؛ جزئیات در [`agent/AGENTS.md`](agent/AGENTS.md). |
+| `agent/` | ایجنت صوتی (`livekit-agents` ۱.۸ + مدل `gpt-realtime` + آواتار Beyond Presence + نویزگیری ai-coustics) و سه ابزار `unblock_user`، `send_email` و `send_sms`. چیدمانش از قالب رسمی [`agent-starter-python`](https://github.com/livekit-examples/agent-starter-python) پیروی می‌کند؛ جزئیات در [`agent/AGENTS.md`](agent/AGENTS.md). |
 | `demo-app/` | اپ دموی «سامانه‌ی داخلی استانداری» (Vite + React). عمداً یک مشکل ورود دارد تا سناریوی پشتیبانی قابل نمایش باشد. |
 
 ## ساختار مخزن
@@ -50,7 +50,8 @@ OSTANDARI/
 │   │   ├── guards.py       اعتبارسنجی ورودی ابزارها و سقف استفاده
 │   │   ├── storage.py      خواندن تنظیمات و نوشتن رونوشت در پایگاه داده
 │   │   ├── crypto.py       رمزگشایی کلیدهای واردشده در پنل
-│   │   └── tools.py        ابزارهای unblock_user و send_email
+│   │   ├── sms.py          کلاینت پیامک قاصدک
+│   │   └── tools.py        ابزارهای unblock_user، send_email و send_sms
 │   ├── tests/test_agent.py تست‌های منطق ابزارها (بدون کلید)
 │   ├── scenarios.yaml      سناریوهای گفت‌وگو برای lk agent simulate
 │   ├── AGENTS.md           راهنمای عامل‌های کدنویس — قبل از تغییر بخوانید
@@ -338,16 +339,17 @@ npx playwright test          # سرتاسری، در مرورگر واقعی
 
 | جایی | چه چیزی | چند |
 |---|---|---|
-| `agent/tests/` | منطق ابزارها، مهارهای امنیتی، نویزگیر، پایگاه داده، رمزنگاری، ساخت پرامپت | ۱۰۸ |
-| `frontend/tests/` | کد دسترسی، محدودیت نرخ، انقضای توکن، رمزنگاری، توکن ادمین، شمارش معکوس | ۶۷ |
+| `agent/tests/` | منطق ابزارها، مهارهای امنیتی، نویزگیر، پایگاه داده، رمزنگاری، ساخت پرامپت، پروتکل پیامک | ۱۹۸ |
+| `frontend/tests/` | کد دسترسی، محدودیت نرخ، انقضای توکن، رمزنگاری، توکن ادمین، شمارش معکوس، آزمایش اتصال قاصدک | ۱۳۱ |
 | `demo-app/tests/` | تشخیص کاربر مسدود | ۱۳ |
-| `e2e/` | ورود و رفع مسدودیت، و پنل ادمین از ابتدا تا انتها، در مرورگر واقعی | ۱۳ |
+| `e2e/` | ورود و رفع مسدودیت، و پنل ادمین از ابتدا تا انتها، در مرورگر واقعی | ۱۴ |
 
 هیچ‌کدام کلید API لازم ندارند و همه در CI اجرا می‌شوند.
 
 ```bash
 node db/migrate.mjs                  # پیش‌نیاز تست‌های پنل
 bash scripts/check-crypto-interop.sh # رمزنگاری Node ⇄ پایتون، هر دو جهت
+GHASEDAK_API_KEY=... scripts/check-sms.sh  # کلید قاصدک واقعاً کار می‌کند؟
 cd agent    && uv run pytest -q
 cd frontend && pnpm test
 cd demo-app && npm test

@@ -17,6 +17,7 @@ const NAV = [
   { href: '/admin', label: 'تنظیمات' },
   { href: '/admin/keys', label: 'کلیدهای API' },
   { href: '/admin/restrictions', label: 'محدودیت‌ها' },
+  { href: '/admin/sms', label: 'پیامک' },
   { href: '/admin/conversations', label: 'تاریخچه' },
 ];
 

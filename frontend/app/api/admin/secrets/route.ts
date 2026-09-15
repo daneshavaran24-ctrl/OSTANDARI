@@ -5,7 +5,7 @@ import { deleteSecret, listSecrets, saveSecret } from '@/lib/db';
 export const revalidate = 0;
 
 /** کلیدهایی که پنل می‌تواند ذخیره کند. */
-const ALLOWED = new Set(['openai_api_key', 'bey_api_key']);
+const ALLOWED = new Set(['openai_api_key', 'bey_api_key', 'sms_api_key']);
 
 /** فقط فراداده — خود کلید هرگز به مرورگر برنمی‌گردد. */
 export async function GET() {

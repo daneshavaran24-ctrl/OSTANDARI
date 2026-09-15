@@ -139,6 +139,51 @@ test.describe('کلیدهای API', () => {
   });
 });
 
+test.describe('پیامک', () => {
+  test('کلید، شماره‌ی خط و کلید فعال‌سازی به دیتابیس می‌رسند', async ({ page }) => {
+    // این تست دقیقاً همان شکافی را می‌بندد که قابلیت پیامک را بی‌استفاده کرده
+    // بود: کد ایجنت آماده بود ولی route پنل این سه کلید را در فهرست سفیدش
+    // نداشت، پس `storage.sms_enabled()` همیشه خاموش برمی‌گشت.
+    await login(page);
+    await page.goto(`${ADMIN}/admin/sms`);
+
+    // پیش از پیکربندی، پنل باید صریح بگوید روشن کردن کلید اثری ندارد
+    await expect(page.getByText('روشن کردن این قابلیت اثری ندارد')).toBeVisible();
+
+    await page.getByLabel('شماره‌ی خط').fill('30001234');
+    await page.getByRole('button', { name: 'ذخیره' }).first().click();
+    await expect(page.getByRole('status')).toContainText('ذخیره شد');
+
+    const secret = 'ghasedak-e2e-NEVER-SHOWN-8765';
+    await page.getByLabel('کلید قاصدک').fill(secret);
+    await page.getByRole('button', { name: 'ذخیره' }).nth(1).click();
+    await expect(page.getByText(/•••• 8765/)).toBeVisible();
+    await expect(page.locator('body')).not.toContainText('NEVER-SHOWN');
+
+    await page.getByRole('checkbox', { name: 'ارسال پیامک فعال باشد' }).check();
+
+    await expect(() => {
+      const db = new DatabaseSync(E2E_DB);
+      const rows = db.prepare("SELECT key, value FROM settings WHERE key LIKE 'sms_%'").all() as {
+        key: string;
+        value: string;
+      }[];
+      const key = db.prepare("SELECT ciphertext FROM secrets WHERE name = 'sms_api_key'").get() as
+        | { ciphertext: string }
+        | undefined;
+      db.close();
+
+      const settings = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+      expect(settings.sms_line_number).toBe('30001234');
+      expect(settings.sms_enabled).toBe('1');
+      expect(key?.ciphertext).not.toContain('NEVER-SHOWN');
+    }).toPass({ timeout: 5000 });
+
+    // و حالا که هر دو تنظیم شده‌اند، هشدار باید برود
+    await expect(page.getByText('روشن کردن این قابلیت اثری ندارد')).toHaveCount(0);
+  });
+});
+
 test.describe('تاریخچه‌ی گفت‌وگو', () => {
   test('رونوشت ثبت‌شده در پنل دیده می‌شود', async ({ page }) => {
     // یک گفت‌وگوی ساختگی مستقیماً در دیتابیس، چون گفت‌وگوی واقعی به کلید معتبر
