@@ -10,12 +10,19 @@ name: Deploy to Liara
 #
 # پس ایمیج اینجا ساخته و به یک رجیستری فرستاده می‌شود و لیارا فقط آن را
 # می‌کشد. کشیدن یک ایمیج، موازی و CDN-دار است؛ دانلود سریالی wheel و npm نیست.
+#
+# 🔴 دکمه‌ی «استقرار» در پنل لیارا را نزنید. آن دکمه سورس را آپلود می‌کند و
+# ایمیج را روی خود لیارا می‌سازد — همان مسیری که بالا توضیح داده شد و در مهلت
+# بیلد جا نمی‌شود. تنها راه درست همین ورکفلوست.
 on:
+  # ادغام در main یعنی استقرار. شاخه‌های کاری آزادند.
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       app:
-        description: نام اپ در لیارا
-        required: true
+        description: نام اپ در لیارا (خالی یعنی از متغیر LIARA_APP خوانده شود)
+        required: false
       registry:
         description: ایمیج کجا منتشر شود
         type: choice
@@ -38,6 +45,43 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # رویداد push هیچ ورودی‌ای ندارد، پس مقدارها از متغیرهای مخزن می‌آیند و
+      # ورودی دستی فقط آن‌ها را موقتاً کنار می‌زند. اگر نام اپ هیچ‌جا نباشد،
+      # همین‌جا با پیام روشن می‌ایستیم — نه با خطای مبهم لیارا چند گام بعد.
+      - name: Work out where this is going
+        env:
+          INPUT_APP: ${{ inputs.app }}
+          INPUT_REGISTRY: ${{ inputs.registry }}
+          VAR_APP: ${{ vars.LIARA_APP }}
+          VAR_REGISTRY: ${{ vars.LIARA_REGISTRY }}
+        run: |
+          APP="${INPUT_APP:-$VAR_APP}"
+          REGISTRY="${INPUT_REGISTRY:-${VAR_REGISTRY:-ghcr}}"
+
+          if [ -z "$APP" ]; then
+            echo "::error::نام اپ لیارا معلوم نیست. یک بار در Settings → Secrets and variables → Actions → Variables متغیر LIARA_APP را بسازید."
+            exit 1
+          fi
+          if [ "$REGISTRY" != "ghcr" ] && [ "$REGISTRY" != "dockerhub" ]; then
+            echo "::error::رجیستری باید ghcr یا dockerhub باشد، نه '$REGISTRY'."
+            exit 1
+          fi
+
+          echo "APP=$APP" >> "$GITHUB_ENV"
+          echo "REGISTRY=$REGISTRY" >> "$GITHUB_ENV"
+          echo "اپ: $APP — رجیستری: $REGISTRY"
+
+      # پیش از بیلد، نه بعدش: نبودِ توکن نباید پس از ده دقیقه ساختن ایمیج
+      # معلوم شود. ارزان‌ترین بررسی، اول.
+      - name: Check the Liara token
+        env:
+          LIARA_TOKEN: ${{ secrets.LIARA_TOKEN }}
+        run: |
+          if [ -z "$LIARA_TOKEN" ]; then
+            echo "::error::LIARA_TOKEN تنظیم نشده است. آن را در Settings → Secrets and variables → Actions بگذارید."
+            exit 1
+          fi
+
       # DOCKER_BUILDKIT=0 چون لیارا بیلدر کلاسیک دارد. ایمیج باید با همان
       # بیلدری ساخته شود که آنجا هم ساخته می‌شد، وگرنه تفاوت‌ها پنهان می‌مانند.
       - name: Build the image
@@ -45,23 +89,14 @@ jobs:
           DOCKER_BUILDKIT: 0
         run: docker build -t ostandari:ci .
 
-      - name: Check the Liara token
-        env:
-          LIARA_TOKEN: ${{ secrets.LIARA_TOKEN }}
-        run: |
-          if [ -z "$LIARA_TOKEN" ]; then
-            echo "::error::LIARA_TOKEN تنظیم نشده است. آن را در Settings → Secrets → Actions بگذارید."
-            exit 1
-          fi
-
       - name: Sign in to GHCR
-        if: ${{ inputs.registry == 'ghcr' }}
+        if: env.REGISTRY == 'ghcr'
         run: |
           echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_SHA::12}" >> "$GITHUB_ENV"
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: Sign in to Docker Hub
-        if: ${{ inputs.registry == 'dockerhub' }}
+        if: env.REGISTRY == 'dockerhub'
         env:
           USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -99,7 +134,7 @@ jobs:
 
           echo "::warning::دسترسی ناشناس به ایمیج تأیید نشد: $IMAGE"
           echo "استقرار ادامه می‌یابد. اگر لیارا نتوانست ایمیج را بکشد، علتش این است:"
-          if [ "${{ inputs.registry }}" = "ghcr" ]; then
+          if [ "$REGISTRY" = "ghcr" ]; then
             cat <<'MESSAGE'
 
           بسته‌های GHCR بار اول خصوصی ساخته می‌شوند. یک بار این کار را بکنید:
@@ -127,8 +162,10 @@ jobs:
         env:
           LIARA_TOKEN: ${{ secrets.LIARA_TOKEN }}
         run: |
+          # بدون --detach: با استقرار خودکار، ورکفلوی سبز باید یعنی «سایت واقعاً
+          # بالا آمد». وگرنه یک ریلیز شکست‌خورده، اجرا را سبز نشان می‌دهد —
+          # همان کلاس خطایی که یک بار در این پروژه خوردیم (CI سبز، استقرار قرمز).
           npx --yes @liara/cli@latest deploy \
             --api-token "$LIARA_TOKEN" \
-            --app "${{ inputs.app }}" \
-            --image "$IMAGE" \
-            --detach
+            --app "$APP" \
+            --image "$IMAGE"
