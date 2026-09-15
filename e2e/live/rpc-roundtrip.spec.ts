@@ -82,13 +82,24 @@ async function probe(scenario: string, room: string, timeout = 60_000): Promise<
  * می‌زند — یعنی دقیقاً همان اتاقی که مرورگر در آن است، بدون هیچ حدسی.
  */
 async function joinRoom(page: Page): Promise<string> {
-  await page.goto(`${APP}/`);
+  // ⚠️ همه‌ی پاسخ‌ها جمع می‌شوند و **اولی** استفاده می‌شود، نه آنکه بعد از کلیک
+  // می‌آید. اپ با `existingOrRefreshConnectionDetails` کار می‌کند: جزئیات را
+  // همان اول می‌گیرد و در کش نگه می‌دارد، و اتصال را با همان برقرار می‌کند.
+  // پاسخ‌های بعدی مربوط به نشست بعدی‌اند. گرفتن آن‌ها یعنی کاوشگر به اتاقی
+  // می‌رود که هیچ‌کس در آن نیست — «کاربر انسانی در اتاق پیدا نشد».
+  const rooms: string[] = [];
+  page.on('response', async (response) => {
+    if (!response.url().includes('/api/connection-details') || !response.ok()) return;
+    try {
+      const { roomName } = (await response.json()) as { roomName?: string };
+      if (roomName) rooms.push(roomName);
+    } catch {
+      // پاسخ‌های غیر JSON اینجا اهمیتی ندارند
+    }
+  });
 
-  const [response] = await Promise.all([
-    page.waitForResponse((r) => r.url().includes('/api/connection-details')),
-    page.getByRole('button', { name: 'شروع گفت‌وگو' }).click(),
-  ]);
-  const { roomName } = (await response.json()) as { roomName: string };
+  await page.goto(`${APP}/`);
+  await page.getByRole('button', { name: 'شروع گفت‌وگو' }).click();
 
   // کلید میکروفون تنها پس از اتصال موفق و گرفتن مجوز انتشار رندر می‌شود، پس
   // انتظار روی آن یعنی انتظار روی یک اتصال WebRTC واقعی، نه یک تایمر دلبخواه.
@@ -96,7 +107,8 @@ async function joinRoom(page: Page): Promise<string> {
     timeout: 45_000,
   });
 
-  return roomName;
+  expect(rooms, 'هیچ پاسخی از connection-details گرفته نشد').not.toHaveLength(0);
+  return rooms[0];
 }
 
 test.describe('رفت‌وبرگشت زنده‌ی RPC', () => {
