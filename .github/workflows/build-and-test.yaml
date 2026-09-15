@@ -319,7 +319,7 @@ jobs:
         run: npm ci --legacy-peer-deps && npm audit --audit-level=high
 
       - name: Scan history for leaked secrets
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # صریح نوشته شده تا معلوم باشد کدام پیکربندی اعمال می‌شود؛ allowlist
