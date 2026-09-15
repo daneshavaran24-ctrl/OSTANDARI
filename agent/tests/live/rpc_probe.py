@@ -203,6 +203,45 @@ SCENARIOS = {
 }
 
 
+# آماده شدن کانال داده پس از پیدا شدن شرکت‌کننده طول می‌کشد، و تلاش‌های بعدی
+# معمولاً در کمتر از یک ثانیه جواب می‌دهند.
+ACK_RETRIES = 4
+ACK_BACKOFF = 1.0
+
+
+async def _run_scenario(scenario: str, room: rtc.Room) -> dict[str, object]:
+    """
+    سناریو را اجرا می‌کند و فقط روی «تأیید دریافت نرسید» دوباره تلاش می‌کند.
+
+    ⚠️ `_connect` به‌محض دیدن مرورگر در `remote_participants` برمی‌گردد، ولی آن
+    فهرست از کانال **سیگنالینگ** می‌آید و کانال **داده‌ی** WebRTC چند صد
+    میلی‌ثانیه دیرتر آماده می‌شود. RPC روی کانال داده می‌رود، پس فراخوانی در آن
+    فاصله با `Connection timeout` رد می‌شود — یعنی مقصد اصلاً دریافت را تأیید
+    نکرد، نه اینکه هندلرش خطا داده باشد.
+
+    روی ماشین محلی این پنجره آن‌قدر کوتاه است که دیده نمی‌شود؛ روی رانر کندتر
+    CI هر هشت تست را قرمز می‌کرد.
+
+    🔴 فقط همین یک خطا دوباره تلاش می‌شود. اگر مرورگر پاسخ داد و پاسخش خطا بود،
+    یا اعتبارسنجی رد کرد، همان‌جا شکست می‌خورد — وگرنه این تست دیگر چیزی را
+    اثبات نمی‌کند و فقط تا سبز شدن تکرار می‌کند.
+    """
+    last: Exception | None = None
+
+    for attempt in range(ACK_RETRIES):
+        try:
+            return await SCENARIOS[scenario](room)
+        except Exception as e:
+            if "Connection timeout" not in _cause_chain(e):
+                raise
+            last = e
+            if attempt < ACK_RETRIES - 1:
+                await asyncio.sleep(ACK_BACKOFF)
+
+    assert last is not None
+    raise last
+
+
 async def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scenario", required=True, choices=sorted(SCENARIOS))
@@ -218,7 +257,7 @@ async def main() -> int:
     try:
         room_name = await _find_room(args.room)
         room = await _connect(room_name)
-        payload = await SCENARIOS[args.scenario](room)
+        payload = await _run_scenario(args.scenario, room)
         _out({"ok": True, "room": room_name, **payload})
         return 0
     except Exception as e:
