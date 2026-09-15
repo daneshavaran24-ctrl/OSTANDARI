@@ -33,7 +33,7 @@ type ProbeResult = {
  * همان `agent/src/rpc.py` تولید را صدا می‌زند، نه یک نسخه‌ی موازی — وگرنه
  * این تست چیزی را می‌سنجید که در تولید اجرا نمی‌شود.
  */
-async function probe(scenario: string, timeout = 60_000): Promise<ProbeResult> {
+async function probe(scenario: string, room: string, timeout = 60_000): Promise<ProbeResult> {
   const options = {
     cwd: AGENT_DIR,
     // ⚠️ حتماً agentEnvironment و نه process.env خام: وقتی سرور LiveKit محلی
@@ -44,7 +44,14 @@ async function probe(scenario: string, timeout = 60_000): Promise<ProbeResult> {
     env: agentEnvironment(),
     timeout,
   };
-  const args = ['run', 'python', 'tests/live/rpc_probe.py', '--scenario', scenario];
+  // 🔴 نام اتاق صریح داده می‌شود، نه اینکه کاوشگر حدسش بزند.
+  //
+  // پیش از این، کاوشگر «تازه‌ترین اتاقی که کاربر دارد» را از API سرور پیدا
+  // می‌کرد. ولی `creation_time` دقت **ثانیه** دارد و تست‌ها پشت سر هم اجرا
+  // می‌شوند، پس اتاق تست قبلی و فعلی در یک ثانیه ساخته می‌شدند و انتخاب
+  // دلبخواه می‌شد. نتیجه: کاوشگر به اتاق قبلی وصل می‌شد که کاربرش داشت
+  // می‌رفت، و خطایش هم گمراه‌کننده بود — «کاربر پیش از پاسخ اتاق را ترک کرد».
+  const args = ['run', 'python', 'tests/live/rpc_probe.py', '--scenario', scenario, '--room', room];
 
   // کاوشگر با خطا کد خروج غیرصفر می‌دهد، ولی همان‌جا هم یک خط JSON می‌نویسد.
   // بدون این، پیام واقعی گم می‌شد و تست فقط «Command failed» نشان می‌داد.
@@ -68,23 +75,35 @@ async function probe(scenario: string, timeout = 60_000): Promise<ProbeResult> {
   }
 }
 
-/** نشست را شروع می‌کند و منتظر می‌ماند تا مرورگر واقعاً به اتاق وصل شود. */
-async function joinRoom(page: Page): Promise<void> {
+/**
+ * نشست را شروع می‌کند، منتظر اتصال واقعی می‌ماند، و **نام اتاق** را برمی‌گرداند.
+ *
+ * نام اتاق از پاسخ همان درخواستی خوانده می‌شود که خود اپ برای گرفتن توکن
+ * می‌زند — یعنی دقیقاً همان اتاقی که مرورگر در آن است، بدون هیچ حدسی.
+ */
+async function joinRoom(page: Page): Promise<string> {
   await page.goto(`${APP}/`);
-  await page.getByRole('button', { name: 'شروع گفت‌وگو' }).click();
+
+  const [response] = await Promise.all([
+    page.waitForResponse((r) => r.url().includes('/api/connection-details')),
+    page.getByRole('button', { name: 'شروع گفت‌وگو' }).click(),
+  ]);
+  const { roomName } = (await response.json()) as { roomName: string };
 
   // کلید میکروفون تنها پس از اتصال موفق و گرفتن مجوز انتشار رندر می‌شود، پس
   // انتظار روی آن یعنی انتظار روی یک اتصال WebRTC واقعی، نه یک تایمر دلبخواه.
   await expect(page.getByRole('button', { name: 'Toggle microphone' })).toBeVisible({
     timeout: 45_000,
   });
+
+  return roomName;
 }
 
 test.describe('رفت‌وبرگشت زنده‌ی RPC', () => {
   test('اعلان ایجنت روی صفحه‌ی کاربر دیده می‌شود و پاسخ برمی‌گردد', async ({ page }) => {
-    await joinRoom(page);
+    const room = await joinRoom(page);
 
-    const result = await probe('notification');
+    const result = await probe('notification', room);
 
     expect(result.ok, `کاوشگر شکست خورد: ${result.error}`).toBe(true);
     // پاسخ واقعی مرورگر، نه یک mock
@@ -93,10 +112,10 @@ test.describe('رفت‌وبرگشت زنده‌ی RPC', () => {
   });
 
   test('تأیید کاربر به ایجنت برمی‌گردد', async ({ page }) => {
-    await joinRoom(page);
+    const room = await joinRoom(page);
 
     // کاوشگر منتظر کلیک می‌ماند، پس نباید await شود
-    const pending = probe('confirmation');
+    const pending = probe('confirmation', room);
 
     const dialog = page.getByRole('alertdialog');
     await expect(dialog).toBeVisible({ timeout: 30_000 });
@@ -107,9 +126,9 @@ test.describe('رفت‌وبرگشت زنده‌ی RPC', () => {
   });
 
   test('انصراف کاربر هم به ایجنت برمی‌گردد', async ({ page }) => {
-    await joinRoom(page);
+    const room = await joinRoom(page);
 
-    const pending = probe('confirmation');
+    const pending = probe('confirmation', room);
 
     const dialog = page.getByRole('alertdialog');
     await expect(dialog).toBeVisible({ timeout: 30_000 });
@@ -123,10 +142,10 @@ test.describe('رفت‌وبرگشت زنده‌ی RPC', () => {
     // مهلت بلندتر چون اینجا پاسخی نمی‌آید: ایجنت باید از قطع شدن شرکت‌کننده
     // بفهمد، و آن سیگنال از سمت سرور می‌رسد، نه از مرورگر.
     test.setTimeout(200_000);
-    await joinRoom(page);
+    const room = await joinRoom(page);
 
     const started = Date.now();
-    const pending = probe('confirmation', 170_000);
+    const pending = probe('confirmation', room, 170_000);
     await expect(page.getByRole('alertdialog')).toBeVisible({ timeout: 30_000 });
 
     // مهم‌ترین ادعای لایه‌ی RPC: سکوت هرگز رضایت نیست. اینجا واقعاً روی شبکه
@@ -143,17 +162,17 @@ test.describe('رفت‌وبرگشت زنده‌ی RPC', () => {
   });
 
   test('حالت آواتار از ایجنت به مرورگر می‌رسد', async ({ page }) => {
-    await joinRoom(page);
-    const result = await probe('avatar_state');
+    const room = await joinRoom(page);
+    const result = await probe('avatar_state', room);
     expect(result).toMatchObject({ ok: true, result: { ok: true } });
   });
 
   test('payload نامعتبر را مرورگر رد می‌کند، نه اینکه نمایش دهد', async ({ page }) => {
-    await joinRoom(page);
+    const room = await joinRoom(page);
 
     // این payload عمداً اعتبارسنج پایتون را دور می‌زند تا سؤال واقعی پرسیده
     // شود: اگر داده‌ی خراب به مرورگر برسد، چه می‌شود؟
-    const result = await probe('invalid_payload');
+    const result = await probe('invalid_payload', room);
 
     expect(result.ok).toBe(true);
     expect(JSON.parse(result.raw ?? '{}')).toHaveProperty('error');
@@ -162,8 +181,8 @@ test.describe('رفت‌وبرگشت زنده‌ی RPC', () => {
   });
 
   test('متد ثبت‌نشده روی سیم هم رد می‌شود', async ({ page }) => {
-    await joinRoom(page);
-    const result = await probe('unknown_method');
+    const room = await joinRoom(page);
+    const result = await probe('unknown_method', room);
     expect(result).toMatchObject({ ok: true, rejected: true });
   });
 });
