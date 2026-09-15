@@ -391,7 +391,10 @@ cd agent && lk agent simulate --scenarios scenarios.yaml
 گام‌ها، متغیرها و عیب‌یابی در [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 **ادغام در `main` یعنی استقرار.** ایمیج در GitHub Actions ساخته می‌شود و لیارا
-فقط می‌کشدش. برای اجرای دستی:
+فقط می‌کشدش.
+
+⚠️ این مخزن هنوز شاخه‌ی `main` ندارد؛ ساختنش یک گام یک‌باره است که در
+[`docs/DEPLOY.md`](docs/DEPLOY.md) نوشته شده. برای اجرای دستی:
 
 ```
 Actions → Deploy to Liara → Run workflow
