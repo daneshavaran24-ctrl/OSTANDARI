@@ -249,6 +249,102 @@ jobs:
       - name: Run live tests
         run: npx playwright test -c playwright.live.config.ts --project=rpc
 
+      # 🔴 علت شکست را در انتهای لاگ می‌گذارد. پیش از این، پیام واقعی وسط
+      # حدود ۲۷۰۰ خط لاگ بود و رسیدن به آن چند بار رفت‌وبرگشت لازم داشت.
+      - name: Say why it failed
+        if: failure()
+        run: |
+          report=playwright-report/live-results.json
+          if [ ! -f "$report" ]; then echo "گزارشی تولید نشد."; exit 0; fi
+          echo "════════ علت شکست ════════"
+          python3 scripts/live-failures.py "$report"
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  live:
+    # تنها جایی که ایجنت، سرور LiveKit و مرورگر واقعاً با هم حرف می‌زنند.
+    # دو باگ واقعی را همین لایه پیدا کرد: نرسیدن اعزام ایجنت به کارگر، و
+    # بلوکه ماندن ۱۲۳ ثانیه‌ای وقتی کاربر وسط تأییدخواهی تب را می‌بندد.
+    # هیچ کلید پولی لازم ندارد؛ لایه‌ی صوتی خودش را رد می‌کند.
+    name: آزمون زنده (LiveKit واقعی)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # ⚠️ package.json ریشه با npm کار می‌کند و `packageManager` ندارد؛ این
+      # اکشن هم ریشه را می‌خواند، نه working-directory جاب. بدون این ورودی
+      # با «No pnpm version is specified» می‌شکند.
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: agent/uv.lock
+
+      - name: Install agent dependencies
+        working-directory: agent
+        run: uv sync --locked
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright
+        run: npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+
+      # سرور از داکر می‌آید؛ scripts/livekit-dev.sh خودش پیدایش می‌کند.
+      - name: Pull the LiveKit server image
+        run: docker pull livekit/livekit-server:latest
+
+      - name: Run live tests
+        run: npx playwright test -c playwright.live.config.ts --project=rpc
+
+      # 🔴 علت شکست را در انتهای لاگ می‌گذارد. پیش از این، پیام واقعی وسط
+      # حدود ۲۷۰۰ خط لاگ بود و رسیدن به آن چند بار رفت‌وبرگشت لازم داشت.
+      - name: Say why it failed
+        if: failure()
+        run: |
+          report=playwright-report/live-results.json
+          [ -f "$report" ] || { echo "گزارشی تولید نشد."; exit 0; }
+          echo "════════ علت شکست ════════"
+          python3 - "$report" <<'PY'
+          import json, sys
+
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              report = json.load(handle)
+
+          def walk(suites):
+              for suite in suites:
+                  for spec in suite.get("specs", []):
+                      for test in spec.get("tests", []):
+                          for run in test.get("results", []):
+                              if run.get("status") in ("passed", "skipped"):
+                                  continue
+                              message = (run.get("error") or {}).get("message", "")
+                              first = message.strip().splitlines()[:3]
+                              print(f"✗ {spec.get('title')}")
+                              for line in first:
+                                  print(f"    {line}")
+                  walk(suite.get("suites", []))
+
+          walk(report.get("suites", []))
+          PY
+
       - name: Upload report on failure
         if: failure()
         uses: actions/upload-artifact@v4

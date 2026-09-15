@@ -38,7 +38,9 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   timeout: 90_000,
-  reporter: [['list']],
+  // گزارش JSON هم گرفته می‌شود تا CI بتواند علت شکست را در انتهای لاگ چاپ کند.
+  // بدون آن، پیام واقعی وسط ~۲۷۰۰ خط لاگ گم می‌شود و پیدا کردنش گران است.
+  reporter: [['list'], ['json', { outputFile: 'playwright-report/live-results.json' }]],
   use: {
     baseURL: APP,
     trace: 'retain-on-failure',
