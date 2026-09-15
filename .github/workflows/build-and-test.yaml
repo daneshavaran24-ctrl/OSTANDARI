@@ -322,3 +322,6 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # صریح نوشته شده تا معلوم باشد کدام پیکربندی اعمال می‌شود؛ allowlist
+          # فقط چند مقدار ساختگی تست را کنار می‌گذارد، نه هیچ مسیری را.
+          GITLEAKS_CONFIG: .gitleaks.toml
